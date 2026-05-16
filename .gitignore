@@ -39,3 +39,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local build artifacts
+/dist/
+
+# local docs / AI handoff notes
+/docs/
+
+# deployment/generated local files
+*.tar.gz
+
+# macOS
+.AppleDouble
+.LSOverride
+
+# local backups that may contain secrets
+*.backup*
+*.bak

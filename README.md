@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SparkIRL — UI Prototype
 
-## Getting Started
+Interactive mobile-first prototype of the SparkIRL app built with Next.js 15, React 19, TypeScript, Tailwind CSS, and shadcn/ui.
 
-First, run the development server:
+## Screens Implemented
+
+| Screen | Route | Description |
+|---|---|---|
+| **Discover** | `/` | Event feed with filter chips, event cards with attendee avatars and verified counts |
+| **Event Detail** | `/event/[id]` | Hero image, host card, "Who's going", about, location map, sticky CTA |
+| **Connections** | `/connections` | Post-event "Missed Connections" pools with expiry countdown |
+| **Attendee Grid** | `/connections` (tap pool) | Grid of event attendees with Connect/Skip actions + mutual match modal |
+| **Going** | `/going` | Upcoming & past events with QR tickets |
+| **Profile** | `/profile` | User profile, stats, interests, preferences, verification badge |
+
+## Design System
+
+- **Palette:** Ember `#FF5A3C`, Ink `#0E0F12`, Cream `#FAF6F0`, Mint `#7DD3B7`, Plum `#3F2A56`
+- **Typography:** Inter (Google Fonts)
+- **Components:** shadcn/ui (Button, Badge, Avatar, Card, Switch, Sheet, Dialog)
+- **Animations:** Framer Motion (page transitions, card animations, mutual match modal)
+- **Layout:** Mobile-first, max-width 448px centered, bottom navigation
+
+## Run Locally
 
 ```bash
+cd sparkirl-prototype
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Screenshots
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `screenshots/` folder for full-page captures of all screens.
