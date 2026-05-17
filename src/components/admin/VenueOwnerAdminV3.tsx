@@ -266,6 +266,17 @@ export function VenueOwnerAdminV3({
   const isOwnerToday = screen.slug === "dashboard";
   const isOwnerPlaces = screen.slug === "places" && ["/owner/places", "/owner/venues"].includes(pathname);
   const isOwnerRequests = screen.slug === "requests" && pathname === "/owner/requests";
+  const isOwnerCalendar = screen.slug === "calendar" && pathname === "/owner/calendar";
+  const isSimpleOwnerSurface = isOwnerToday || isOwnerPlaces || isOwnerRequests || isOwnerCalendar;
+  const PrimaryActionIcon = isOwnerRequests || isOwnerCalendar ? CalendarDays : Plus;
+  const primaryActionHref = isOwnerRequests || isOwnerCalendar ? "/owner/calendar" : "/owner/venues/new";
+  const primaryActionLabel = isOwnerRequests
+    ? "Открыть календарь"
+    : isOwnerCalendar
+      ? "Добавить закрытую дату"
+      : isOwnerToday || isOwnerPlaces
+        ? "Добавить площадку"
+        : "Add place";
   const selectedVenue = venues[0];
   const selectedClaim = currentSlug === "claim-needs-info" ? claims[1] : claims[0];
   const conflicts = useMemo(() => detectScheduleConflicts(ownerCalendarItems), []);
@@ -363,10 +374,18 @@ export function VenueOwnerAdminV3({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Владелец площадки</span>
             <span>/</span>
-            <span>{isOwnerToday || isOwnerPlaces || isOwnerRequests ? "Рабочая зона" : "Simple workspace"}</span>
+            <span>{isSimpleOwnerSurface ? "Рабочая зона" : "Simple workspace"}</span>
           </div>
           <h1 className="mt-2 text-2xl font-bold tracking-normal">
-            {isOwnerToday ? "Сегодня" : isOwnerPlaces ? "Площадки" : isOwnerRequests ? "Заявки" : activeSurface.title ?? screen.title}
+            {isOwnerToday
+              ? "Сегодня"
+              : isOwnerPlaces
+                ? "Площадки"
+                : isOwnerRequests
+                  ? "Заявки"
+                  : isOwnerCalendar
+                    ? "Календарь"
+                    : activeSurface.title ?? screen.title}
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             {isOwnerToday
@@ -375,24 +394,26 @@ export function VenueOwnerAdminV3({
                 ? "Управляйте профилями, правилами доступа и публичным видом площадок."
                 : isOwnerRequests
                   ? "Организаторы и события, которые ждут вашего решения."
-                : activeSurface.description ?? screen.description}
+                  : isOwnerCalendar
+                    ? "Расписание событий, заявок и закрытых дат по вашим площадкам."
+                    : activeSurface.description ?? screen.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!isOwnerToday && !isOwnerPlaces && !isOwnerRequests && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+          {!isSimpleOwnerSurface && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
             <FileText className="h-4 w-4" />
             Preview states
           </Button>}
-          <Link href={isOwnerRequests ? "/owner/calendar" : "/owner/venues/new"}>
+          <Link href={primaryActionHref}>
             <Button>
-              {isOwnerRequests ? <CalendarDays className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {isOwnerRequests ? "Открыть календарь" : isOwnerToday || isOwnerPlaces ? "Добавить площадку" : "Add place"}
+              <PrimaryActionIcon className="h-4 w-4" />
+              {primaryActionLabel}
             </Button>
           </Link>
         </div>
       </div>
 
-      {!isOwnerRequests && (
+      {!isOwnerRequests && !isOwnerCalendar && (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {isOwnerToday ? (
             <>
@@ -419,8 +440,8 @@ export function VenueOwnerAdminV3({
         </div>
       )}
 
-      {!isOwnerToday && !isOwnerPlaces && !isOwnerRequests && <SectionTabs screen={screen} activeSurface={activeSurface} />}
-      {!isOwnerToday && !isOwnerPlaces && !isOwnerRequests && showEdgeStates && (
+      {!isSimpleOwnerSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isSimpleOwnerSurface && showEdgeStates && (
         <OperationalStatesPanel partialData={screen.partialData ?? activeSurface.partialData} permissionRole="venue_owner" />
       )}
 
@@ -1418,8 +1439,110 @@ function EventRequestTable({ requests }: { requests: OwnerEventRequest[] }) {
   );
 }
 
-function OwnerCalendarView({ currentSlug, conflicts, audit }: OwnerViewProps) {
+function ownerCalendarItemTitle(item: (typeof ownerCalendarItems)[number]) {
+  if (item.kind === "hold") return "Подготовка площадки";
+  if (item.kind === "blackout") return "Закрытая дата: частный монтаж";
+  if (item.kind === "request") return "Заявка: винный вечер";
+  return item.title;
+}
+
+function ownerCalendarItemTypeLabel(item: (typeof ownerCalendarItems)[number]) {
+  if (item.kind === "request") return "Заявка на событие";
+  if (item.kind === "blackout") return "Закрытая дата";
+  if (item.kind === "hold") return "Внутренний резерв";
+  return "Событие";
+}
+
+function ownerCalendarStatusLabel(item: (typeof ownerCalendarItems)[number]) {
+  if (item.kind === "hold") return "Резерв";
+  if (item.status === "changes_requested") return "Конфликт времени";
+  if (item.status === "confirmed" || item.status === "approved") return "Подтверждено";
+  if (item.status === "blocked" || item.status === "rejected") return "Закрыто";
+  return "Ждёт решения";
+}
+
+function ownerCalendarActionLabel(item: (typeof ownerCalendarItems)[number]) {
+  if (item.status === "changes_requested") return "Решить конфликт";
+  if (item.kind === "hold") return "Освободить время";
+  if (item.kind === "blackout") return "Изменить";
+  if (item.kind === "external_event") return "Открыть";
+  if (item.status === "pending") return "Рассмотреть";
+  return "Открыть";
+}
+
+function formatOwnerCalendarTime(value: string) {
+  return value
+    .replace("Fri", "Пт")
+    .replace("Sat", "Сб")
+    .replace("Sun", "Вс")
+    .replace("all day", "весь день");
+}
+
+function OwnerCalendarView({ pathname, currentSlug, conflicts, audit }: OwnerViewProps) {
   const items = currentSlug === "conflicts" ? conflicts : ownerCalendarItems;
+  if (pathname === "/owner/calendar") {
+    const filters = ["Месяц", "Неделя", "Конфликты", "Заявки", "Закрытые даты"];
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {filters.map((filter) => (
+            <Button key={filter} variant={filter === "Месяц" ? "default" : "outline"} size="sm">
+              {filter}
+            </Button>
+          ))}
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {ownerCalendarItems.map((item) => {
+            const title = ownerCalendarItemTitle(item);
+            const action = ownerCalendarActionLabel(item);
+            return (
+              <Card key={item.id} className="border-0 shadow-sm">
+                <CardContent className="space-y-4 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold">{title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {item.venueName} · {formatOwnerCalendarTime(item.startsAt)} - {formatOwnerCalendarTime(item.endsAt)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Badge variant="outline">{ownerCalendarItemTypeLabel(item)}</Badge>
+                      <Badge variant={item.status === "changes_requested" ? "destructive" : "secondary"}>
+                        {ownerCalendarStatusLabel(item)}
+                      </Badge>
+                    </div>
+                  </div>
+                  {item.status === "changes_requested" && (
+                    <InlineNotice
+                      tone="warn"
+                      title="Что сделать"
+                      text="Решите конфликт времени перед одобрением заявки."
+                    />
+                  )}
+                  {item.status === "pending" && item.kind === "external_event" && (
+                    <InlineNotice
+                      title="Что сделать"
+                      text="Рассмотреть заявку и подтвердить время."
+                    />
+                  )}
+                  {item.kind === "hold" && (
+                    <InlineNotice
+                      tone="good"
+                      title="Подтверждено"
+                      text="Время закрыто для подготовки площадки."
+                    />
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => audit(action, title)}>
+                    {action}
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
   return (
     <Card className="border-0 shadow-sm">
       <CardHeader className="pb-2">
