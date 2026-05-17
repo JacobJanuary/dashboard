@@ -239,6 +239,9 @@ export function OrganizerAdminV3({
     activeSurface.slug.startsWith("ai-builder/");
   const isTodaySurface = screen.slug === "dashboard";
   const isEventsListSurface = screen.slug === "events" && currentSlug === "events";
+  const isEventWorkspaceSurface =
+    screen.slug === "events" &&
+    ["workspace", "guests", "chat", "promote", "event-money", "workspace-settings"].includes(currentSlug);
 
   useEffect(() => {
     setAiPrompt((current) => (
@@ -354,44 +357,46 @@ export function OrganizerAdminV3({
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
-      <div className="admin-page-head flex flex-col gap-4 p-5 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Badge className="bg-[#eef2ff] text-[#3949d7] border-0">{roleLabels.organizer}</Badge>
-            <Badge className="bg-[#f8fafc] text-[#475569] border border-[#dde4ee]">Simple workspace</Badge>
+      {!isEventWorkspaceSurface && (
+        <div className="admin-page-head flex flex-col gap-4 p-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Badge className="bg-[#eef2ff] text-[#3949d7] border-0">{roleLabels.organizer}</Badge>
+              <Badge className="bg-[#f8fafc] text-[#475569] border border-[#dde4ee]">Simple workspace</Badge>
+            </div>
+            <h1 className="text-2xl font-bold tracking-normal">
+              {isTodaySurface ? "Сегодня" : isEventsListSurface ? "События" : isCreateSurface ? "Create Event" : activeSurface.title}
+            </h1>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {isTodaySurface
+                ? "Главная очередь действий организатора."
+                : isEventsListSurface
+                  ? "Управляйте черновиками, ближайшими и прошедшими событиями."
+                  : activeSurface.description}
+            </p>
           </div>
-          <h1 className="text-2xl font-bold tracking-normal">
-            {isTodaySurface ? "Сегодня" : isEventsListSurface ? "События" : isCreateSurface ? "Create Event" : activeSurface.title}
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {isTodaySurface
-              ? "Главная очередь действий организатора."
-              : isEventsListSurface
-                ? "Управляйте черновиками, ближайшими и прошедшими событиями."
-                : activeSurface.description}
-          </p>
+          {!isCreateSurface && (
+            <div className="flex flex-wrap gap-2">
+              {!isTodaySurface && !isEventsListSurface && (
+                <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+                  <AlertTriangle className="h-4 w-4" />
+                  Preview states
+                </Button>
+              )}
+              <Link href="/organizer/events/new">
+                <Button className="bg-primary hover:bg-primary/90">
+                  <Plus className="h-4 w-4" />
+                  {isTodaySurface || isEventsListSurface ? "Создать событие" : "Create event"}
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
-        {!isCreateSurface && (
-          <div className="flex flex-wrap gap-2">
-            {!isTodaySurface && !isEventsListSurface && (
-              <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
-                <AlertTriangle className="h-4 w-4" />
-                Preview states
-              </Button>
-            )}
-            <Link href="/organizer/events/new">
-              <Button className="bg-primary hover:bg-primary/90">
-                <Plus className="h-4 w-4" />
-                {isTodaySurface || isEventsListSurface ? "Создать событие" : "Create event"}
-              </Button>
-            </Link>
-          </div>
-        )}
-      </div>
+      )}
 
-      {!isCreateSurface && !isEventsListSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
 
-      {!isCreateSurface && !isEventsListSurface && (
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metrics.map((metric) => (
             <MetricCard key={metric.label} {...metric} />
@@ -399,7 +404,7 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
 
       {renderOrganizerSurface({
         screen,
@@ -430,7 +435,7 @@ export function OrganizerAdminV3({
         publishSelectedEvent,
       })}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && (
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && (
         <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <OperationalStatesPanel partialData={screen.partialData || activeSurface.partialData} permissionRole="organizer" />
           <AuditLogPanel logs={auditLogs.filter((log) => log.actorRole === "organizer")} localLogs={localAudit} />
@@ -910,34 +915,87 @@ function EventWorkspace({
   ledgerEntries,
   audit,
   updateParticipant,
+  publishSelectedEvent,
 }: OrganizerSurfaceProps) {
   const activeTab = currentSlug === "workspace" ? "overview" : currentSlug;
   const tabs = [
-    { slug: "overview", label: "Overview", href: `/organizer/events/${selectedEvent.id}` },
-    { slug: "guests", label: "Guests", href: `/organizer/events/${selectedEvent.id}/guests` },
-    { slug: "chat", label: "Chat", href: `/organizer/events/${selectedEvent.id}/chat` },
-    { slug: "promote", label: "Promote", href: `/organizer/events/${selectedEvent.id}/promote` },
-    { slug: "event-money", label: "Money", href: `/organizer/events/${selectedEvent.id}/money` },
-    { slug: "workspace-settings", label: "Settings", href: `/organizer/events/${selectedEvent.id}/workspace-settings` },
+    { slug: "overview", label: "Обзор", href: `/organizer/events/${selectedEvent.id}` },
+    { slug: "guests", label: "Гости", href: `/organizer/events/${selectedEvent.id}/guests` },
+    { slug: "chat", label: "Чат", href: `/organizer/events/${selectedEvent.id}/chat` },
+    { slug: "promote", label: "Промо", href: `/organizer/events/${selectedEvent.id}/promote` },
+    { slug: "event-money", label: "Деньги", href: `/organizer/events/${selectedEvent.id}/money` },
+    { slug: "workspace-settings", label: "Настройки", href: `/organizer/events/${selectedEvent.id}/workspace-settings` },
   ];
   const totals = calculateLedgerTotals(ledgerEntries);
   const refundTotal = Math.abs(
     ledgerEntries.filter((entry) => entry.type === "refund").reduce((sum, entry) => sum + entry.amount, 0),
   );
+  const display = organizerEventDisplay(selectedEvent);
+  const primaryAction = selectedEvent.publicationStatus === "ready_to_publish"
+    ? { label: "Опубликовать", href: "", onClick: publishSelectedEvent }
+    : { label: display.action, href: display.href, onClick: () => audit("Открыли действие", selectedEvent.title) };
+  const nextStep = selectedEvent.publicationStatus === "blocked_until_gates_pass"
+    ? "Событие ждёт подтверждения площадки."
+    : selectedEvent.publicationStatus === "ready_to_publish"
+      ? "Проверки пройдены. Можно опубликовать событие."
+      : selectedEvent.publicationStatus === "published"
+        ? "Продажи открыты. Проверьте гостей и ответьте на сообщения."
+        : ["completed", "archived"].includes(selectedEvent.publicationStatus)
+          ? "Событие завершено. Проверьте итоги и выплату."
+          : "Проверьте детали события и продолжайте подготовку.";
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-      <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-2">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle className="text-lg">{selectedEvent.title}</CardTitle>
-              <p className="text-sm text-muted-foreground">{selectedEvent.venueName} · {selectedEvent.date}</p>
+    <div className="space-y-6">
+      <Card className="overflow-hidden border-0 shadow-sm">
+        <CardContent className="grid gap-5 p-4 lg:grid-cols-[220px_1fr_auto]">
+          <div className="relative min-h-[172px] overflow-hidden rounded-2xl bg-[#eef2f7]">
+            <Image
+              src={demoEventCover(0)}
+              alt={selectedEvent.title}
+              fill
+              className="object-cover"
+              sizes="(max-width: 1024px) 100vw, 220px"
+            />
+            <div className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-[#111827] shadow-sm">
+              {selectedEvent.category}
             </div>
-            <StatusBadge value={selectedEvent.publicationStatus} type="publication" />
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          <div className="min-w-0 space-y-4">
+            <div>
+              <Badge className={display.tone}>{display.status}</Badge>
+              <h1 className="mt-3 text-2xl font-bold tracking-normal">{selectedEvent.title}</h1>
+              <p className="mt-2 text-sm text-muted-foreground">{selectedEvent.date}</p>
+              <p className="text-sm text-muted-foreground">{selectedEvent.venueName}</p>
+            </div>
+            <div className="grid gap-3 text-sm sm:grid-cols-3">
+              <div className="rounded-xl bg-[#f8fafc] px-3 py-2">
+                <p className="text-xs text-muted-foreground">Гости</p>
+                <p className="font-semibold text-[#111827]">{selectedEvent.ticketsSold}/{selectedEvent.capacity}</p>
+              </div>
+              <div className="rounded-xl bg-[#f8fafc] px-3 py-2">
+                <p className="text-xs text-muted-foreground">Выручка</p>
+                <p className="font-semibold text-[#111827]">{formatMoney(selectedEvent.revenue)}</p>
+              </div>
+              <div className="rounded-xl bg-[#f8fafc] px-3 py-2">
+                <p className="text-xs text-muted-foreground">Сообщения</p>
+                <p className="font-semibold text-[#111827]">3 требуют ответа</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-start justify-end">
+            {primaryAction.href ? (
+              <Link href={primaryAction.href}>
+                <Button className="min-w-[180px]">{primaryAction.label}</Button>
+              </Link>
+            ) : (
+              <Button className="min-w-[180px]" onClick={primaryAction.onClick}>{primaryAction.label}</Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-3">
           <div className="flex gap-2 overflow-x-auto">
             {tabs.map((tab) => (
               <Link key={tab.slug} href={tab.href} className="shrink-0">
@@ -954,30 +1012,84 @@ function EventWorkspace({
               </Link>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="space-y-4 p-5">
 
           {activeTab === "overview" && (
-            <>
-              <div className="grid gap-3 md:grid-cols-3">
-                <MetricCard label="Guests" value={`${selectedEvent.ticketsSold}/${selectedEvent.capacity}`} tone="info" />
-                <MetricCard label="Revenue" value={formatMoney(selectedEvent.revenue)} tone="good" />
-                <MetricCard label="Messages" value="3" tone="warn" />
-              </div>
+            <div className="space-y-4">
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-                <p className="font-semibold">Next step</p>
-                <p className="mt-1">Waiting for {selectedEvent.venueName} to approve the date and format. You can message the owner or change the place.</p>
+                <p className="font-semibold">Что нужно сделать</p>
+                <p className="mt-1">{nextStep}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => audit("Messaged venue owner", selectedEvent.venueName)}>Message owner</Button>
-                  <Button size="sm" variant="outline" onClick={() => audit("Change place opened", selectedEvent.title)}>Change place</Button>
+                  <Button size="sm" onClick={() => audit("Написали владельцу", selectedEvent.venueName)}>Написать владельцу</Button>
+                  <Button size="sm" variant="outline" onClick={() => audit("Открыли изменение места", selectedEvent.title)}>Изменить место</Button>
                 </div>
               </div>
-            </>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <MetricCard label="Гости" value={`${selectedEvent.ticketsSold}/${selectedEvent.capacity}`} helper="зарегистрированы" tone="info" />
+                <MetricCard label="Выручка" value={formatMoney(selectedEvent.revenue)} helper="по билетам" tone="good" />
+                <MetricCard label="Сообщения" value="3" helper="нужен ответ" tone="warn" />
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-border p-4">
+                  <p className="font-semibold">Публикация</p>
+                  <Badge className={cn("mt-3", display.tone)}>{display.status}</Badge>
+                  <p className="mt-3 text-sm text-muted-foreground">{nextStep}</p>
+                </div>
+                <div className="rounded-xl border border-border p-4">
+                  <p className="font-semibold">Билеты и деньги</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <InfoRow label="Продано" value={`${selectedEvent.ticketsSold}/${selectedEvent.capacity}`} />
+                    <InfoRow label="Выручка" value={formatMoney(selectedEvent.revenue)} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-blue-950">Сообщения</p>
+                    <p className="mt-1 text-sm text-blue-950/80">3 новых сообщения</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge className="border border-blue-200 bg-white text-blue-950">Черновик ответа ИИ</Badge>
+                      <Badge className="border border-blue-200 bg-white text-blue-950">Только черновики</Badge>
+                    </div>
+                  </div>
+                  <Link href={`/organizer/events/${selectedEvent.id}/chat`}>
+                    <Button size="sm">Открыть чат</Button>
+                  </Link>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border p-4">
+                <p className="font-semibold">Быстрые действия</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    ["Проверить гостей", `/organizer/events/${selectedEvent.id}/guests`],
+                    ["Ответить в чате", `/organizer/events/${selectedEvent.id}/chat`],
+                    ["Продвинуть событие", `/organizer/events/${selectedEvent.id}/promote`],
+                    ["Открыть выплату", `/organizer/events/${selectedEvent.id}/money`],
+                  ].map(([label, href]) => (
+                    <Link key={label} href={href}>
+                      <Button className="w-full" variant="outline" size="sm">{label}</Button>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
           )}
 
           {activeTab === "guests" && (
             <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full min-w-[680px] text-sm">
                 <thead className="bg-secondary/60 text-left text-xs text-muted-foreground">
-                  <tr><th className="px-3 py-2">Guest</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Paid</th><th className="px-3 py-2">Actions</th></tr>
+                  <tr><th className="px-3 py-2">Гость</th><th className="px-3 py-2">Статус</th><th className="px-3 py-2">Оплачено</th><th className="px-3 py-2">Действия</th></tr>
                 </thead>
                 <tbody>
                   {participants.slice(0, 6).map((participant) => (
@@ -990,9 +1102,9 @@ function EventWorkspace({
                       <td className="px-3 py-3">{formatMoney(participant.paid)}</td>
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap gap-2">
-                          <Button size="sm" variant="outline" onClick={() => updateParticipant(participant.id, "approved")}>Approve</Button>
-                          <Button size="sm" variant="outline" onClick={() => audit("Message guest", participant.name)}>Message</Button>
-                          <Button size="sm" variant="outline" onClick={() => updateParticipant(participant.id, "checked_in")}>Check in</Button>
+                          <Button size="sm" variant="outline" onClick={() => updateParticipant(participant.id, "approved")}>Одобрить</Button>
+                          <Button size="sm" variant="outline" onClick={() => audit("Написали гостю", participant.name)}>Написать</Button>
+                          <Button size="sm" variant="outline" onClick={() => updateParticipant(participant.id, "checked_in")}>Отметить вход</Button>
                         </div>
                       </td>
                     </tr>
@@ -1003,25 +1115,25 @@ function EventWorkspace({
           )}
 
           {activeTab === "chat" && (
-            <div className="grid gap-3">
-              <div className="rounded-xl border border-border p-4">
-                <p className="font-semibold">Maya</p>
-                <p className="mt-1 text-sm text-muted-foreground">Can I bring a friend?</p>
+              <div className="grid gap-3">
+                <div className="rounded-xl border border-border p-4">
+                  <p className="font-semibold">Maya</p>
+                <p className="mt-1 text-sm text-muted-foreground">Можно прийти с другом?</p>
               </div>
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-                <p className="font-semibold text-blue-950">AI draft reply</p>
-                <p className="mt-1 text-sm text-blue-950/80">Yes, if tickets are still available. You can add +1 from your ticket page.</p>
+                <p className="font-semibold text-blue-950">Черновик ответа ИИ</p>
+                <p className="mt-1 text-sm text-blue-950/80">Да, если билеты ещё доступны. Гость может добавить +1 на странице билета.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => audit("AI draft sent", selectedEvent.title)}>Send</Button>
-                  <Button size="sm" variant="outline">Edit</Button>
-                  <Button size="sm" variant="outline">Dismiss</Button>
+                  <Button size="sm" onClick={() => audit("Отправили черновик ИИ", selectedEvent.title)}>Отправить</Button>
+                  <Button size="sm" variant="outline">Изменить</Button>
+                  <Button size="sm" variant="outline">Убрать</Button>
                 </div>
               </div>
               <div className="rounded-xl border border-border p-4">
-                <p className="font-semibold">AI settings for this event</p>
+                <p className="font-semibold">ИИ-помощник для этого события</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {["Off", "Draft only", "Auto FAQ"].map((mode) => (
-                    <Button key={mode} size="sm" variant={mode === "Draft only" ? "default" : "outline"} onClick={() => audit("AI chat mode selected", mode)}>
+                  {["Выключен", "Только черновики", "Авто FAQ"].map((mode) => (
+                    <Button key={mode} size="sm" variant={mode === "Только черновики" ? "default" : "outline"} onClick={() => audit("Выбрали режим ИИ", mode)}>
                       {mode}
                     </Button>
                   ))}
@@ -1032,10 +1144,10 @@ function EventWorkspace({
 
           {activeTab === "promote" && (
             <div className="grid gap-3 md:grid-cols-2">
-              {["Boost event", "Copy/share link", "Generate AI promo copy", "Promo code"].map((item, index) => (
-                <button key={item} onClick={() => audit("Promotion action opened", item)} className={cn("rounded-xl border p-4 text-left", index === 0 ? "border-primary/30 bg-primary/5" : "border-border")}>
+              {["Продвинуть событие", "Скопировать ссылку", "Текст промо с ИИ", "Промокод"].map((item, index) => (
+                <button key={item} onClick={() => audit("Открыли промо-действие", item)} className={cn("rounded-xl border p-4 text-left", index === 0 ? "border-primary/30 bg-primary/5" : "border-border")}>
                   <p className="font-semibold">{item}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Simple promotion option for this event.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Простой способ привлечь больше гостей на это событие.</p>
                 </button>
               ))}
             </div>
@@ -1043,20 +1155,20 @@ function EventWorkspace({
 
           {activeTab === "event-money" && (
             <div className="grid gap-3 md:grid-cols-4">
-              <MetricCard label="Gross revenue" value={formatMoney(totals.gross)} tone="good" />
-              <MetricCard label="Net payout" value={formatMoney(Math.max(totals.gross - totals.fees, 0))} tone="info" />
-              <MetricCard label="Refunds" value={formatMoney(refundTotal)} tone="warn" />
-              <MetricCard label="Payout date" value="May 22" tone="neutral" />
+              <MetricCard label="Выручка" value={formatMoney(totals.gross)} tone="good" />
+              <MetricCard label="К выплате" value={formatMoney(Math.max(totals.gross - totals.fees, 0))} tone="info" />
+              <MetricCard label="Возвраты" value={formatMoney(refundTotal)} tone="warn" />
+              <MetricCard label="Дата выплаты" value="22 мая" tone="neutral" />
             </div>
           )}
 
           {activeTab === "workspace-settings" && (
             <div className="grid gap-3 md:grid-cols-2">
               {[
-                ["Tickets and guests", `${selectedEvent.capacity} total spots`],
-                ["Refund policy", selectedEvent.refundPolicy],
-                ["Chat and AI", "Draft only"],
-                ["Public preview", "Ready for review"],
+                ["Билеты и гости", `${selectedEvent.capacity} мест`],
+                ["Политика возврата", selectedEvent.refundPolicy],
+                ["Чат и ИИ", "Только черновики"],
+                ["Публичная страница", "Готово к просмотру"],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-xl border border-border p-4">
                   <p className="font-semibold">{label}</p>
@@ -1065,9 +1177,20 @@ function EventWorkspace({
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
-      <PublicPreviewFrame href={selectedEvent.publicPreviewUrl} />
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Публичная страница</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PublicPreviewFrame href={selectedEvent.publicPreviewUrl} />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
