@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Bot,
   CalendarDays,
@@ -260,8 +261,10 @@ export function VenueOwnerAdminV3({
   const [policyReason, setPolicyReason] = useState("");
   const [reviewReason, setReviewReason] = useState("");
 
+  const pathname = usePathname();
   const currentSlug = activeSlug(screen, activeSurface);
   const isOwnerToday = screen.slug === "dashboard";
+  const isOwnerPlaces = screen.slug === "places" && ["/owner/places", "/owner/venues"].includes(pathname);
   const selectedVenue = venues[0];
   const selectedClaim = currentSlug === "claim-needs-info" ? claims[1] : claims[0];
   const conflicts = useMemo(() => detectScheduleConflicts(ownerCalendarItems), []);
@@ -359,24 +362,28 @@ export function VenueOwnerAdminV3({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Владелец площадки</span>
             <span>/</span>
-            <span>{isOwnerToday ? "Рабочая зона" : "Simple workspace"}</span>
+            <span>{isOwnerToday || isOwnerPlaces ? "Рабочая зона" : "Simple workspace"}</span>
           </div>
           <h1 className="mt-2 text-2xl font-bold tracking-normal">
-            {isOwnerToday ? "Сегодня" : activeSurface.title ?? screen.title}
+            {isOwnerToday ? "Сегодня" : isOwnerPlaces ? "Площадки" : activeSurface.title ?? screen.title}
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {isOwnerToday ? "Что требует решения по вашим площадкам." : activeSurface.description ?? screen.description}
+            {isOwnerToday
+              ? "Что требует решения по вашим площадкам."
+              : isOwnerPlaces
+                ? "Управляйте профилями, правилами доступа и публичным видом площадок."
+                : activeSurface.description ?? screen.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!isOwnerToday && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+          {!isOwnerToday && !isOwnerPlaces && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
             <FileText className="h-4 w-4" />
             Preview states
           </Button>}
           <Link href="/owner/venues/new">
             <Button>
               <Plus className="h-4 w-4" />
-              {isOwnerToday ? "Добавить площадку" : "Add place"}
+              {isOwnerToday || isOwnerPlaces ? "Добавить площадку" : "Add place"}
             </Button>
           </Link>
         </div>
@@ -390,6 +397,13 @@ export function VenueOwnerAdminV3({
             <MetricCard label="Заявки на события" value={metrics.pendingEvents} helper="Ждёт вас" tone="info" />
             <MetricCard label="Конфликты календаря" value={metrics.conflicts} helper="Конфликт" tone="danger" />
           </>
+        ) : isOwnerPlaces ? (
+          <>
+            <MetricCard label="Мои площадки" value={venues.length} helper="Готово" tone="good" />
+            <MetricCard label="Одобрено" value={metrics.verifiedVenues} helper="Можно принимать заявки" tone="good" />
+            <MetricCard label="Нужны данные" value={venues.filter((venue) => venue.claimStatus !== "approved").length} helper="Проверьте профиль" tone="warn" />
+            <MetricCard label="Правила доступа" value={venues.length} helper="Настроены" tone="info" />
+          </>
         ) : (
           <>
             <MetricCard label="Verified places" value={metrics.verifiedVenues} helper="Ready for requests" tone="good" />
@@ -400,8 +414,8 @@ export function VenueOwnerAdminV3({
         )}
       </div>
 
-      {!isOwnerToday && <SectionTabs screen={screen} activeSurface={activeSurface} />}
-      {!isOwnerToday && showEdgeStates && (
+      {!isOwnerToday && !isOwnerPlaces && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isOwnerToday && !isOwnerPlaces && showEdgeStates && (
         <OperationalStatesPanel partialData={screen.partialData ?? activeSurface.partialData} permissionRole="venue_owner" />
       )}
 
@@ -651,6 +665,31 @@ function OwnerTodayView({
   );
 }
 
+function ownerVenueStatusLabel(status: OwnerVenueProfile["claimStatus"]) {
+  if (status === "approved") return "Одобрено";
+  if (status === "pending") return "Ждёт проверки";
+  if (status === "rejected") return "Скрыто";
+  return "Нужны данные";
+}
+
+function ownerVenueStatusClass(status: OwnerVenueProfile["claimStatus"]) {
+  if (status === "approved") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "pending") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (status === "rejected") return "border-slate-200 bg-slate-100 text-slate-700";
+  return "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+function ownerAccessRuleLabel(mode: VenuePolicyMode) {
+  if (mode === "approve_organizers") return "Я одобряю организаторов один раз";
+  if (mode === "moderate_every_event") return "Я проверяю каждое внешнее событие";
+  return "Закрыто для внешних событий";
+}
+
+function ownerVenueAddressLabel(address: string) {
+  if (address.toLowerCase().startsWith("hidden address until")) return "Адрес скрыт до подтверждения";
+  return address;
+}
+
 function OwnerVenuesView(props: OwnerViewProps) {
   const {
     currentSlug,
@@ -670,42 +709,69 @@ function OwnerVenuesView(props: OwnerViewProps) {
     return (
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">My places</CardTitle>
+          <CardTitle className="text-base">Площадки</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-3">
-          {venues.map((venue, index) => (
-            <div key={venue.id} className="rounded-xl border border-border bg-white p-4">
-              <div className="relative h-36 overflow-hidden rounded-xl">
-                <Image src={venue.coverImage} alt={venue.name} fill className="object-cover" sizes="360px" />
-              </div>
-              <div className="mt-4 flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold">{venue.name}</h3>
-                  <p className="text-xs text-muted-foreground">{venue.address} · capacity {venue.capacity}</p>
+          {venues.map((venue) => {
+            const isApproved = venue.claimStatus === "approved";
+            const isClosedToExternalEvents = venue.policy.mode === "no_external_events";
+            return (
+              <div key={venue.id} className="rounded-xl border border-border bg-white p-4">
+                <div className="relative h-36 overflow-hidden rounded-xl">
+                  <Image src={venue.coverImage} alt={venue.name} fill className="object-cover" sizes="360px" />
                 </div>
-                <StatusBadge value={venue.claimStatus} />
+                <div className="mt-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">{venue.name}</h3>
+                    <p className="text-xs text-muted-foreground">{ownerVenueAddressLabel(venue.address)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Вместимость: {venue.capacity}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", ownerVenueStatusClass(venue.claimStatus))}>
+                      {ownerVenueStatusLabel(venue.claimStatus)}
+                    </span>
+                    {isClosedToExternalEvents && (
+                      <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                        Скрыто
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Badge variant="secondary">{ownerAccessRuleLabel(venue.policy.mode)}</Badge>
+                  <Badge variant="outline">Сегодня: {venue.utilizationToday}%</Badge>
+                  <Badge variant="outline">★ {venue.rating}</Badge>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link href={`/owner/venues/${venue.id}`}>
+                    <Button size="sm">Открыть</Button>
+                  </Link>
+                  {isApproved ? (
+                    <>
+                      <Link href={`/owner/venues/${venue.id}/edit`}>
+                        <Button size="sm" variant="outline">Изменить</Button>
+                      </Link>
+                      <Link href={`/owner/venues/${venue.id}/access-policy`}>
+                        <Button size="sm" variant="outline">Правила доступа</Button>
+                      </Link>
+                      <Link href={`/owner/venues/${venue.id}/preview`}>
+                        <Button size="sm" variant="outline">Предпросмотр</Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <Link href={`/owner/venues/${venue.id}/limited`}>
+                      <Button size="sm" variant="outline">Добавить данные</Button>
+                    </Link>
+                  )}
+                </div>
+                {!isApproved && (
+                  <div className="mt-4">
+                    <InlineNotice tone="warn" title="Площадке нужны данные" text="Добавьте недостающие данные, чтобы открыть редактирование и заявки." />
+                  </div>
+                )}
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Badge variant="secondary">{venuePolicyLabels[venue.policy.mode]}</Badge>
-                <Badge variant="outline">{venue.utilizationToday}% today</Badge>
-                <Badge variant="outline">★ {venue.rating}</Badge>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link href={`/owner/venues/${venue.id}`}>
-                  <Button size="sm">Open</Button>
-                </Link>
-                <Link href={`/owner/venues/${venue.id}/access-policy`}>
-                  <Button size="sm" variant="outline">Access rules</Button>
-                </Link>
-                <Link href={`/owner/venues/${venue.id}/${venue.claimStatus === "approved" ? "preview" : "limited"}`}>
-                  <Button size="sm" variant="outline">{venue.claimStatus === "approved" ? "Preview" : "Limited"}</Button>
-                </Link>
-              </div>
-              {index === 1 && (
-                <InlineNotice tone="warn" title="Claim pending" text="Profile and policy edits are locked until moderator verification." />
-              )}
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
     );
