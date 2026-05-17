@@ -265,6 +265,7 @@ export function VenueOwnerAdminV3({
   const currentSlug = activeSlug(screen, activeSurface);
   const isOwnerToday = screen.slug === "dashboard";
   const isOwnerPlaces = screen.slug === "places" && ["/owner/places", "/owner/venues"].includes(pathname);
+  const isOwnerRequests = screen.slug === "requests" && pathname === "/owner/requests";
   const selectedVenue = venues[0];
   const selectedClaim = currentSlug === "claim-needs-info" ? claims[1] : claims[0];
   const conflicts = useMemo(() => detectScheduleConflicts(ownerCalendarItems), []);
@@ -362,65 +363,70 @@ export function VenueOwnerAdminV3({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Владелец площадки</span>
             <span>/</span>
-            <span>{isOwnerToday || isOwnerPlaces ? "Рабочая зона" : "Simple workspace"}</span>
+            <span>{isOwnerToday || isOwnerPlaces || isOwnerRequests ? "Рабочая зона" : "Simple workspace"}</span>
           </div>
           <h1 className="mt-2 text-2xl font-bold tracking-normal">
-            {isOwnerToday ? "Сегодня" : isOwnerPlaces ? "Площадки" : activeSurface.title ?? screen.title}
+            {isOwnerToday ? "Сегодня" : isOwnerPlaces ? "Площадки" : isOwnerRequests ? "Заявки" : activeSurface.title ?? screen.title}
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             {isOwnerToday
               ? "Что требует решения по вашим площадкам."
               : isOwnerPlaces
                 ? "Управляйте профилями, правилами доступа и публичным видом площадок."
+                : isOwnerRequests
+                  ? "Организаторы и события, которые ждут вашего решения."
                 : activeSurface.description ?? screen.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!isOwnerToday && !isOwnerPlaces && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+          {!isOwnerToday && !isOwnerPlaces && !isOwnerRequests && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
             <FileText className="h-4 w-4" />
             Preview states
           </Button>}
-          <Link href="/owner/venues/new">
+          <Link href={isOwnerRequests ? "/owner/calendar" : "/owner/venues/new"}>
             <Button>
-              <Plus className="h-4 w-4" />
-              {isOwnerToday || isOwnerPlaces ? "Добавить площадку" : "Add place"}
+              {isOwnerRequests ? <CalendarDays className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {isOwnerRequests ? "Открыть календарь" : isOwnerToday || isOwnerPlaces ? "Добавить площадку" : "Add place"}
             </Button>
           </Link>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {isOwnerToday ? (
-          <>
-            <MetricCard label="Мои площадки" value={venues.length} helper="Готово" tone="good" />
-            <MetricCard label="Заявки организаторов" value={metrics.pendingAccess} helper="Нужно решение" tone="warn" />
-            <MetricCard label="Заявки на события" value={metrics.pendingEvents} helper="Ждёт вас" tone="info" />
-            <MetricCard label="Конфликты календаря" value={metrics.conflicts} helper="Конфликт" tone="danger" />
-          </>
-        ) : isOwnerPlaces ? (
-          <>
-            <MetricCard label="Мои площадки" value={venues.length} helper="Готово" tone="good" />
-            <MetricCard label="Одобрено" value={metrics.verifiedVenues} helper="Можно принимать заявки" tone="good" />
-            <MetricCard label="Нужны данные" value={venues.filter((venue) => venue.claimStatus !== "approved").length} helper="Проверьте профиль" tone="warn" />
-            <MetricCard label="Правила доступа" value={venues.length} helper="Настроены" tone="info" />
-          </>
-        ) : (
-          <>
-            <MetricCard label="Verified places" value={metrics.verifiedVenues} helper="Ready for requests" tone="good" />
-            <MetricCard label="Organizer requests" value={metrics.pendingAccess} helper="Need a decision" tone="warn" />
-            <MetricCard label="Event requests" value={metrics.pendingEvents} helper="Waiting for you" tone="info" />
-            <MetricCard label="Schedule conflicts" value={metrics.conflicts} helper="Need attention" tone="danger" />
-          </>
-        )}
-      </div>
+      {!isOwnerRequests && (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {isOwnerToday ? (
+            <>
+              <MetricCard label="Мои площадки" value={venues.length} helper="Готово" tone="good" />
+              <MetricCard label="Заявки организаторов" value={metrics.pendingAccess} helper="Нужно решение" tone="warn" />
+              <MetricCard label="Заявки на события" value={metrics.pendingEvents} helper="Ждёт вас" tone="info" />
+              <MetricCard label="Конфликты календаря" value={metrics.conflicts} helper="Конфликт" tone="danger" />
+            </>
+          ) : isOwnerPlaces ? (
+            <>
+              <MetricCard label="Мои площадки" value={venues.length} helper="Готово" tone="good" />
+              <MetricCard label="Одобрено" value={metrics.verifiedVenues} helper="Можно принимать заявки" tone="good" />
+              <MetricCard label="Нужны данные" value={venues.filter((venue) => venue.claimStatus !== "approved").length} helper="Проверьте профиль" tone="warn" />
+              <MetricCard label="Правила доступа" value={venues.length} helper="Настроены" tone="info" />
+            </>
+          ) : (
+            <>
+              <MetricCard label="Verified places" value={metrics.verifiedVenues} helper="Ready for requests" tone="good" />
+              <MetricCard label="Organizer requests" value={metrics.pendingAccess} helper="Need a decision" tone="warn" />
+              <MetricCard label="Event requests" value={metrics.pendingEvents} helper="Waiting for you" tone="info" />
+              <MetricCard label="Schedule conflicts" value={metrics.conflicts} helper="Need attention" tone="danger" />
+            </>
+          )}
+        </div>
+      )}
 
-      {!isOwnerToday && !isOwnerPlaces && <SectionTabs screen={screen} activeSurface={activeSurface} />}
-      {!isOwnerToday && !isOwnerPlaces && showEdgeStates && (
+      {!isOwnerToday && !isOwnerPlaces && !isOwnerRequests && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isOwnerToday && !isOwnerPlaces && !isOwnerRequests && showEdgeStates && (
         <OperationalStatesPanel partialData={screen.partialData ?? activeSurface.partialData} permissionRole="venue_owner" />
       )}
 
       {renderOwnerSurface({
         screen,
+        pathname,
         currentSlug,
         venues,
         selectedVenue,
@@ -457,6 +463,7 @@ export function VenueOwnerAdminV3({
 
 type OwnerViewProps = {
   screen: AdminScreenDefinition;
+  pathname: string;
   currentSlug: string;
   venues: OwnerVenueProfile[];
   selectedVenue: OwnerVenueProfile;
@@ -1104,7 +1111,152 @@ function OwnerClaimView({
   );
 }
 
+const ownerRequestFilters = ["Все", "Организаторы", "События", "Ждут решения", "Нужны правки", "Одобрено"];
+
+type OwnerRequestStatus = ApprovalStatus | "blocked";
+
+function ownerRequestStatusLabel(status: OwnerRequestStatus, conflict = false) {
+  if (conflict && status === "pending") return "Конфликт времени";
+  if (status === "pending") return "Ждёт решения";
+  if (status === "changes_requested" || status === "escalated") return "Нужны правки";
+  if (status === "approved" || status === "not_required") return "Одобрено";
+  return "Отклонено";
+}
+
+function ownerRequestStatusClass(status: OwnerRequestStatus, conflict = false) {
+  if (conflict && status === "pending") return "border-red-200 bg-red-50 text-red-800";
+  if (status === "pending") return "border-amber-200 bg-amber-50 text-amber-800";
+  if (status === "changes_requested" || status === "escalated") return "border-blue-200 bg-blue-50 text-blue-800";
+  if (status === "approved" || status === "not_required") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-slate-200 bg-slate-100 text-slate-700";
+}
+
+function ownerSetupNeedsText(text: string) {
+  if (text.includes("80 chairs")) return "80 стульев, обогреватели для патио, стол регистрации";
+  if (text.includes("Security plan")) return "План охраны, поздний монтаж, страховка";
+  return text;
+}
+
+function ownerOrganizerHistoryText(text: string) {
+  if (text.includes("18 past events")) return "18 прошлых событий, 0 жалоб, рейтинг 4.7";
+  if (text.includes("New organizer")) return "Новый организатор, нужны уточнения по безопасности";
+  return text;
+}
+
+function OwnerRequestsInbox({
+  accessRequests,
+  eventRequests,
+}: {
+  accessRequests: OwnerOrganizerAccessRequest[];
+  eventRequests: OwnerEventRequest[];
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-2">
+        {ownerRequestFilters.map((filter) => (
+          <Button key={filter} size="sm" variant={filter === "Все" ? "default" : "outline"}>
+            {filter}
+          </Button>
+        ))}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {accessRequests.map((request) => (
+          <Card key={request.id} className="border-0 shadow-sm">
+            <CardContent className="space-y-4 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Badge variant="secondary">Организатор</Badge>
+                  <h3 className="mt-3 text-lg font-bold">{request.organizerName}</h3>
+                  <p className="text-sm text-muted-foreground">{request.venueName}</p>
+                </div>
+                <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", ownerRequestStatusClass(request.status))}>
+                  {ownerRequestStatusLabel(request.status)}
+                </span>
+              </div>
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-xl bg-secondary/50 p-3">
+                  <p className="text-xs text-muted-foreground">Рейтинг и опыт</p>
+                  <p className="mt-1 font-medium">
+                    {request.rating} рейтинг · {request.pastEvents} событий · {request.complaintCount} жалоб
+                  </p>
+                </div>
+                <div className="rounded-xl bg-secondary/50 p-3">
+                  <p className="text-xs text-muted-foreground">Когда пришла заявка</p>
+                  <p className="mt-1 font-medium">{request.requestedAt}</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border p-3 text-sm">
+                <p className="text-xs text-muted-foreground">Сообщение организатора</p>
+                <p className="mt-1">{request.note}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm">Рассмотреть</Button>
+                <Button size="sm" variant="outline">Одобрить</Button>
+                <Button size="sm" variant="outline">Отклонить</Button>
+                <Button size="sm" variant="outline">
+                  <MessageSquare className="h-4 w-4" />
+                  Написать
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+
+        {eventRequests.map((request) => (
+          <Card key={request.id} className="border-0 shadow-sm">
+            <CardContent className="space-y-4 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Badge variant="secondary">Событие</Badge>
+                  <h3 className="mt-3 text-lg font-bold">{request.event.title}</h3>
+                  <p className="text-sm text-muted-foreground">{request.event.organizerName} · {request.venueName}</p>
+                </div>
+                <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", ownerRequestStatusClass(request.status, request.conflict))}>
+                  {ownerRequestStatusLabel(request.status, request.conflict)}
+                </span>
+              </div>
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-xl bg-secondary/50 p-3">
+                  <p className="text-xs text-muted-foreground">Дата и время</p>
+                  <p className="mt-1 font-medium">{request.event.date}</p>
+                </div>
+                <div className="rounded-xl bg-secondary/50 p-3">
+                  <p className="text-xs text-muted-foreground">Гости / вместимость</p>
+                  <p className="mt-1 font-medium">{request.event.ticketsSold} / {request.event.capacity}</p>
+                </div>
+                <div className="rounded-xl bg-secondary/50 p-3">
+                  <p className="text-xs text-muted-foreground">Что нужно подготовить</p>
+                  <p className="mt-1 font-medium">{ownerSetupNeedsText(request.setupNeeds)}</p>
+                </div>
+                <div className="rounded-xl bg-secondary/50 p-3">
+                  <p className="text-xs text-muted-foreground">Опыт организатора</p>
+                  <p className="mt-1 font-medium">{ownerOrganizerHistoryText(request.organizerHistory)}</p>
+                </div>
+              </div>
+              {request.conflict && (
+                <InlineNotice tone="warn" title="Конфликт времени" text="Запрос пересекается с другим бронированием или подготовкой площадки." />
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm">Рассмотреть</Button>
+                <Button size="sm" variant="outline">Одобрить</Button>
+                <Button size="sm" variant="outline">Запросить правки</Button>
+                <Button size="sm" variant="outline">Отклонить</Button>
+                <Button size="sm" variant="outline">
+                  <MessageSquare className="h-4 w-4" />
+                  Написать
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function OwnerApprovalsView({
+  pathname,
   currentSlug,
   accessRequests,
   eventRequests,
@@ -1113,6 +1265,10 @@ function OwnerApprovalsView({
   decideAccess,
   decideEventRequest,
 }: OwnerViewProps) {
+  if (pathname === "/owner/requests") {
+    return <OwnerRequestsInbox accessRequests={accessRequests} eventRequests={eventRequests} />;
+  }
+
   const request = accessRequests[0];
   const eventRequest = eventRequests[0];
   const showEvents =
