@@ -242,6 +242,7 @@ export function OrganizerAdminV3({
   const isEventWorkspaceSurface =
     screen.slug === "events" &&
     ["workspace", "guests", "chat", "promote", "event-money", "workspace-settings"].includes(currentSlug);
+  const isMessagesSurface = screen.slug === "messages" && currentSlug === "messages";
 
   useEffect(() => {
     setAiPrompt((current) => (
@@ -365,28 +366,42 @@ export function OrganizerAdminV3({
               <Badge className="bg-[#f8fafc] text-[#475569] border border-[#dde4ee]">Simple workspace</Badge>
             </div>
             <h1 className="text-2xl font-bold tracking-normal">
-              {isTodaySurface ? "Сегодня" : isEventsListSurface ? "События" : isCreateSurface ? "Create Event" : activeSurface.title}
+              {isTodaySurface
+                ? "Сегодня"
+                : isEventsListSurface
+                  ? "События"
+                  : isMessagesSurface
+                    ? "Сообщения"
+                    : isCreateSurface
+                      ? "Create Event"
+                      : activeSurface.title}
             </h1>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
               {isTodaySurface
                 ? "Главная очередь действий организатора."
                 : isEventsListSurface
                   ? "Управляйте черновиками, ближайшими и прошедшими событиями."
+                  : isMessagesSurface
+                    ? "Ответы участникам, владельцам площадок и черновики ИИ."
                   : activeSurface.description}
             </p>
           </div>
           {!isCreateSurface && (
             <div className="flex flex-wrap gap-2">
-              {!isTodaySurface && !isEventsListSurface && (
+              {!isTodaySurface && !isEventsListSurface && !isMessagesSurface && (
                 <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
                   <AlertTriangle className="h-4 w-4" />
                   Preview states
                 </Button>
               )}
-              <Link href="/organizer/events/new">
+              <Link href={isMessagesSurface ? "/organizer/events/evt_123/announcements" : "/organizer/events/new"}>
                 <Button className="bg-primary hover:bg-primary/90">
                   <Plus className="h-4 w-4" />
-                  {isTodaySurface || isEventsListSurface ? "Создать событие" : "Create event"}
+                  {isMessagesSurface
+                    ? "Создать объявление"
+                    : isTodaySurface || isEventsListSurface
+                      ? "Создать событие"
+                      : "Create event"}
                 </Button>
               </Link>
             </div>
@@ -394,9 +409,9 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
 
-      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && (
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metrics.map((metric) => (
             <MetricCard key={metric.label} {...metric} />
@@ -404,7 +419,7 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
 
       {renderOrganizerSurface({
         screen,
@@ -435,7 +450,7 @@ export function OrganizerAdminV3({
         publishSelectedEvent,
       })}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && (
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && (
         <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <OperationalStatesPanel partialData={screen.partialData || activeSurface.partialData} permissionRole="organizer" />
           <AuditLogPanel logs={auditLogs.filter((log) => log.actorRole === "organizer")} localLogs={localAudit} />
@@ -2033,7 +2048,119 @@ function CheckInMode({
   );
 }
 
+const organizerConversationFilters = [
+  "Все",
+  "Требуют ответа",
+  "Участники",
+  "Площадки",
+  "Черновики ИИ",
+  "Объявления",
+];
+
+const organizerInboxConversations = [
+  {
+    title: "Чат участников",
+    context: "Sunset Singles Mixer",
+    preview: "Можно прийти с другом?",
+    time: "12 мин назад",
+    status: "Нужно ответить",
+    action: "Ответить",
+    tone: "bg-[#fff5dd] text-[#a76100] border border-[#ffd88c]",
+  },
+  {
+    title: "Черновик ответа ИИ",
+    context: "Sunset Singles Mixer · участники",
+    preview: "Да, если билеты ещё доступны. Добавьте гостя на странице билета.",
+    time: "18 мин назад",
+    status: "Есть черновик ИИ",
+    action: "Проверить черновик",
+    tone: "bg-[#eef2ff] text-[#3949d7] border border-[#c7d2fe]",
+  },
+  {
+    title: "Владелец площадки",
+    context: "The Penmar · Sunset Singles Mixer",
+    preview: "План расстановки получили, ждём подтверждение по звуку.",
+    time: "Сегодня, 10:40",
+    status: "Ожидает владельца",
+    action: "Написать владельцу",
+    tone: "bg-[#f8fafc] text-[#475569] border border-[#dde4ee]",
+  },
+  {
+    title: "Объявление гостям",
+    context: "Sunset Singles Mixer",
+    preview: "Напоминание о времени входа и правилах чата готово к отправке.",
+    time: "Черновик",
+    status: "Объявление готово",
+    action: "Создать объявление",
+    tone: "bg-[#ecfdf5] text-[#047857] border border-[#a7f3d0]",
+  },
+  {
+    title: "Сообщения участникам",
+    context: "AI Networking Breakfast",
+    preview: "Новых сообщений нет.",
+    time: "Вчера",
+    status: "Без новых сообщений",
+    action: "Открыть чат",
+    tone: "bg-white text-[#475569] border border-[#dde4ee]",
+  },
+];
+
+function OrganizerMessagesInbox({ audit }: Pick<OrganizerSurfaceProps, "audit">) {
+  return (
+    <div className="space-y-5">
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-3">
+          <div className="flex gap-2 overflow-x-auto">
+            {organizerConversationFilters.map((filter, index) => (
+              <button
+                key={filter}
+                className={cn(
+                  "shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition-colors",
+                  index === 0
+                    ? "border-[#111827] bg-[#111827] text-white"
+                    : "border-border bg-white text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                )}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3">
+        {organizerInboxConversations.map((conversation) => (
+          <Card key={`${conversation.title}-${conversation.context}`} className="border-0 shadow-sm">
+            <CardContent className="grid gap-4 p-4 lg:grid-cols-[1fr_auto] lg:items-center">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-semibold tracking-normal text-[#111827]">{conversation.title}</h2>
+                  <Badge className={conversation.tone}>{conversation.status}</Badge>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{conversation.context}</p>
+                <p className="mt-3 text-sm text-[#111827]">{conversation.preview}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{conversation.time}</p>
+              </div>
+              <Button
+                className="w-full lg:w-auto"
+                variant={conversation.action === "Открыть чат" ? "outline" : "default"}
+                onClick={() => audit(conversation.action, conversation.context)}
+              >
+                {conversation.action}
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function OrganizerChatsView({ currentSlug, audit }: OrganizerSurfaceProps) {
+  if (currentSlug === "messages") {
+    return <OrganizerMessagesInbox audit={audit} />;
+  }
+
   const isAnnouncement = currentSlug === "announcements";
   const isDrafts = currentSlug === "ai-draft-replies";
   const isInbox = currentSlug === "direct-messages";
