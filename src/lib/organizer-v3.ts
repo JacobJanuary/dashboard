@@ -562,28 +562,28 @@ export function canOrganizerPublish(event: AdminEvent) {
 export function nextBestOrganizerTasks(events: AdminEvent[], requests: VenueRequest[]) {
   return [
     {
-      title: "Resolve approval gates",
+      title: "Событие ждёт подтверждения площадки",
       entity: events.find((event) => event.publicationStatus === "blocked_until_gates_pass")?.title ?? events[0]?.title,
-      state: "blocked_until_gates_pass",
-      action: "Open tracker",
+      state: "Ждёт подтверждения площадки",
+      action: "Посмотреть, что осталось",
     },
     {
-      title: "Reply to venue request",
-      entity: requests.find((request) => request.status === "pending")?.venueName ?? "Venue request",
-      state: "pending",
-      action: "Message owner",
+      title: "Ответьте владельцу площадки",
+      entity: requests.find((request) => request.status === "pending")?.venueName ?? "Запрос площадки",
+      state: "Нужно ответить",
+      action: "Написать владельцу",
     },
     {
-      title: "Review AI draft replies",
-      entity: "Inbox",
-      state: "draft_replies",
-      action: "Review",
+      title: "Проверьте черновики ответов ИИ",
+      entity: "Входящие",
+      state: "Черновики ИИ",
+      action: "Проверить",
     },
     {
-      title: "Check payout status",
-      entity: "Ledger",
-      state: "kyc_required",
-      action: "Open payouts",
+      title: "Проверьте выплату",
+      entity: "Выплаты",
+      state: "Нужны данные",
+      action: "Открыть выплаты",
     },
   ];
 }

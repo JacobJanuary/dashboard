@@ -237,6 +237,7 @@ export function OrganizerAdminV3({
     screen.slug === "ai-builder" ||
     screen.slug.startsWith("ai-builder/") ||
     activeSurface.slug.startsWith("ai-builder/");
+  const isTodaySurface = screen.slug === "dashboard";
 
   useEffect(() => {
     setAiPrompt((current) => (
@@ -323,27 +324,29 @@ export function OrganizerAdminV3({
 
   const metrics = [
     {
-      label: "Needs attention",
+      label: isTodaySurface ? "Требуют внимания" : "Needs attention",
       value: tasks.length,
-      helper: "Approvals, messages, payouts",
+      helper: isTodaySurface ? "Подтверждения, сообщения и выплаты" : "Approvals, messages, payouts",
       tone: "warn" as const,
     },
     {
-      label: "Active events",
+      label: isTodaySurface ? "Активные события" : "Active events",
       value: events.filter((event) => !["cancelled", "archived"].includes(event.publicationStatus)).length,
-      helper: "Drafts and upcoming",
+      helper: isTodaySurface ? "Черновики и ближайшие события" : "Drafts and upcoming",
       tone: "info" as const,
     },
     {
-      label: "Guests",
+      label: isTodaySurface ? "Гости" : "Guests",
       value: participantCounts.total,
-      helper: `${participantCounts.checked_in} checked in`,
+      helper: isTodaySurface ? `${participantCounts.checked_in} пришли на событие` : `${participantCounts.checked_in} checked in`,
       tone: "good" as const,
     },
     {
-      label: "Pending payout",
+      label: isTodaySurface ? "Ожидается выплата" : "Pending payout",
       value: formatMoney(ledgerTotals.pending),
-      helper: ledgerTotals.blocked ? "Tax info needed" : "On track",
+      helper: isTodaySurface
+        ? ledgerTotals.blocked ? "Нужны данные для выплаты" : "Всё в порядке"
+        : ledgerTotals.blocked ? "Tax info needed" : "On track",
       tone: ledgerTotals.blocked ? "danger" as const : "neutral" as const,
     },
   ];
@@ -357,20 +360,24 @@ export function OrganizerAdminV3({
             <Badge className="bg-[#f8fafc] text-[#475569] border border-[#dde4ee]">Simple workspace</Badge>
           </div>
           <h1 className="text-2xl font-bold tracking-normal">
-            {isCreateSurface ? "Create Event" : activeSurface.title}
+            {isTodaySurface ? "Сегодня" : isCreateSurface ? "Create Event" : activeSurface.title}
           </h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{activeSurface.description}</p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            {isTodaySurface ? "Главная очередь действий организатора." : activeSurface.description}
+          </p>
         </div>
         {!isCreateSurface && (
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
-              <AlertTriangle className="h-4 w-4" />
-              Preview states
-            </Button>
+            {!isTodaySurface && (
+              <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+                <AlertTriangle className="h-4 w-4" />
+                Preview states
+              </Button>
+            )}
             <Link href="/organizer/events/new">
               <Button className="bg-primary hover:bg-primary/90">
                 <Plus className="h-4 w-4" />
-                Create event
+                {isTodaySurface ? "Создать событие" : "Create event"}
               </Button>
             </Link>
           </div>
@@ -387,7 +394,7 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
+      {!isCreateSurface && !isTodaySurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
 
       {renderOrganizerSurface({
         screen,
@@ -418,7 +425,7 @@ export function OrganizerAdminV3({
         publishSelectedEvent,
       })}
 
-      {!isCreateSurface && (
+      {!isCreateSurface && !isTodaySurface && (
         <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <OperationalStatesPanel partialData={screen.partialData || activeSurface.partialData} permissionRole="organizer" />
           <AuditLogPanel logs={auditLogs.filter((log) => log.actorRole === "organizer")} localLogs={localAudit} />
@@ -483,7 +490,7 @@ function TodayView({ events, venueRequests, participants, audit, currentSlug }: 
     <div className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Today requires action</CardTitle>
+          <CardTitle className="text-base">Что требует внимания сегодня</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {tasks.map((task) => (
@@ -494,7 +501,7 @@ function TodayView({ events, venueRequests, participants, audit, currentSlug }: 
               </div>
               <div className="flex items-center gap-2">
                 <StatusBadge value={task.state} type="plain" />
-                <Button variant="outline" size="sm" onClick={() => audit("Task opened", task.entity ?? task.title)}>
+                <Button variant="outline" size="sm" onClick={() => audit("Открыли задачу", task.entity ?? task.title)}>
                   {task.action}
                 </Button>
               </div>
@@ -503,17 +510,78 @@ function TodayView({ events, venueRequests, participants, audit, currentSlug }: 
         </CardContent>
       </Card>
       <div className="space-y-6">
-        <ApprovalTracker event={events[0]} />
+        <TodayPublicationCard event={events[0]} />
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Participant pulse</CardTitle>
+            <CardTitle className="text-base">Гости сегодня</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm">
-            <InfoRow label="Applications" value={participants.filter((item) => item.status === "applied").length} />
-            <InfoRow label="Waitlist" value={participants.filter((item) => item.status === "waitlist").length} />
-            <InfoRow label="Refund requested" value={participants.filter((item) => item.status === "refund_requested").length} />
+            <InfoRow label="Заявки" value={participants.filter((item) => item.status === "applied").length} />
+            <InfoRow label="Лист ожидания" value={participants.filter((item) => item.status === "waitlist").length} />
+            <InfoRow label="Запрошен возврат" value={participants.filter((item) => item.status === "refund_requested").length} />
           </CardContent>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+function TodayPublicationCard({ event }: { event?: AdminEvent }) {
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Публикация события</CardTitle>
+        {event && <p className="text-xs text-muted-foreground">{event.title}</p>}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <TodayPublicationRow
+          icon="clock"
+          title="Подтверждение площадки"
+          status="Ждёт решения"
+          text="Владелец площадки проверяет дату и формат."
+        />
+        <TodayPublicationRow
+          icon="check"
+          title="Проверка платформы"
+          status="Одобрено"
+          text="Платформа уже проверила событие."
+        />
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+          Можно публиковать после подтверждения площадки.
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TodayPublicationRow({
+  icon,
+  title,
+  status,
+  text,
+}: {
+  icon: "clock" | "check";
+  title: string;
+  status: string;
+  text: string;
+}) {
+  const Icon = icon === "check" ? CheckCircle2 : Clock;
+  return (
+    <div className="flex gap-3 rounded-xl border border-border p-3">
+      <div className={cn(
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+        icon === "check" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700",
+      )}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-semibold">{title}</p>
+          <Badge className={icon === "check" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}>
+            {status}
+          </Badge>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{text}</p>
       </div>
     </div>
   );
