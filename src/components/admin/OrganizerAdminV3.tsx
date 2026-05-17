@@ -73,7 +73,7 @@ import {
   type OrganizerParticipant,
   type VenueRequest,
 } from "@/lib/organizer-v3";
-import { demoAdminImages, demoEventCovers, demoVenueCover } from "@/lib/demo-assets";
+import { demoAdminImages, demoEventCover, demoEventCovers, demoVenueCover } from "@/lib/demo-assets";
 import { useLanguage } from "@/components/i18n/LanguageProvider";
 import { appendSharedAuditEntry } from "@/lib/shared-audit";
 import { cn } from "@/lib/utils";
@@ -238,6 +238,7 @@ export function OrganizerAdminV3({
     screen.slug.startsWith("ai-builder/") ||
     activeSurface.slug.startsWith("ai-builder/");
   const isTodaySurface = screen.slug === "dashboard";
+  const isEventsListSurface = screen.slug === "events" && currentSlug === "events";
 
   useEffect(() => {
     setAiPrompt((current) => (
@@ -360,15 +361,19 @@ export function OrganizerAdminV3({
             <Badge className="bg-[#f8fafc] text-[#475569] border border-[#dde4ee]">Simple workspace</Badge>
           </div>
           <h1 className="text-2xl font-bold tracking-normal">
-            {isTodaySurface ? "Сегодня" : isCreateSurface ? "Create Event" : activeSurface.title}
+            {isTodaySurface ? "Сегодня" : isEventsListSurface ? "События" : isCreateSurface ? "Create Event" : activeSurface.title}
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {isTodaySurface ? "Главная очередь действий организатора." : activeSurface.description}
+            {isTodaySurface
+              ? "Главная очередь действий организатора."
+              : isEventsListSurface
+                ? "Управляйте черновиками, ближайшими и прошедшими событиями."
+                : activeSurface.description}
           </p>
         </div>
         {!isCreateSurface && (
           <div className="flex flex-wrap gap-2">
-            {!isTodaySurface && (
+            {!isTodaySurface && !isEventsListSurface && (
               <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
                 <AlertTriangle className="h-4 w-4" />
                 Preview states
@@ -377,16 +382,16 @@ export function OrganizerAdminV3({
             <Link href="/organizer/events/new">
               <Button className="bg-primary hover:bg-primary/90">
                 <Plus className="h-4 w-4" />
-                {isTodaySurface ? "Создать событие" : "Create event"}
+                {isTodaySurface || isEventsListSurface ? "Создать событие" : "Create event"}
               </Button>
             </Link>
           </div>
         )}
       </div>
 
-      {!isCreateSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isCreateSurface && !isEventsListSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
 
-      {!isCreateSurface && (
+      {!isCreateSurface && !isEventsListSurface && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metrics.map((metric) => (
             <MetricCard key={metric.label} {...metric} />
@@ -394,7 +399,7 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isTodaySurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
 
       {renderOrganizerSurface({
         screen,
@@ -425,7 +430,7 @@ export function OrganizerAdminV3({
         publishSelectedEvent,
       })}
 
-      {!isCreateSurface && !isTodaySurface && (
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && (
         <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <OperationalStatesPanel partialData={screen.partialData || activeSurface.partialData} permissionRole="organizer" />
           <AuditLogPanel logs={auditLogs.filter((log) => log.actorRole === "organizer")} localLogs={localAudit} />
@@ -637,53 +642,179 @@ function EventsPipeline({ events }: OrganizerSurfaceProps) {
   );
 }
 
+type OrganizerEventsFilter = "all" | "attention" | "drafts" | "upcoming" | "past";
+
+const organizerEventFilters: Array<{ id: OrganizerEventsFilter; label: string }> = [
+  { id: "all", label: "Все" },
+  { id: "attention", label: "Требуют внимания" },
+  { id: "drafts", label: "Черновики" },
+  { id: "upcoming", label: "Скоро" },
+  { id: "past", label: "Прошли" },
+];
+
+function organizerEventDisplay(event: AdminEvent) {
+  const venueReview = event.approvalGates.find((item) => item.type === "venue");
+  const platformReview = event.approvalGates.find((item) => item.type === "platform");
+
+  if (event.publicationStatus === "draft") {
+    return {
+      status: "Черновик",
+      group: "drafts" as OrganizerEventsFilter,
+      action: "Продолжить черновик",
+      href: "/organizer/events/new",
+      tone: "bg-[#f8fafc] text-[#475569] border border-[#dde4ee]",
+    };
+  }
+
+  if (event.publicationStatus === "blocked_until_gates_pass") {
+    const needsOwnerReply = venueReview?.status === "changes_requested" || venueReview?.status === "escalated" || platformReview?.status === "rejected";
+    return {
+      status: needsOwnerReply ? "Нужно ответить владельцу" : "Ждёт подтверждения площадки",
+      group: "attention" as OrganizerEventsFilter,
+      action: needsOwnerReply ? "Ответить владельцу" : "Посмотреть, что осталось",
+      href: needsOwnerReply ? "/organizer/venue-requests" : `/organizer/events/${event.id}/approval`,
+      tone: needsOwnerReply
+        ? "bg-[#fff0ef] text-[#c52b20] border border-[#ffb3ad]"
+        : "bg-[#fff5dd] text-[#a76100] border border-[#ffd88c]",
+    };
+  }
+
+  if (event.publicationStatus === "ready_to_publish") {
+    return {
+      status: "Можно публиковать",
+      group: "upcoming" as OrganizerEventsFilter,
+      action: "Открыть событие",
+      href: `/organizer/events/${event.id}`,
+      tone: "bg-[#eaf4ff] text-[#0969b9] border border-[#b7ddff]",
+    };
+  }
+
+  if (event.publicationStatus === "published") {
+    return {
+      status: event.ticketsSold > 0 ? "Продажи открыты" : "Опубликовано",
+      group: "upcoming" as OrganizerEventsFilter,
+      action: event.ticketsSold > 0 ? "Проверить гостей" : "Открыть событие",
+      href: event.ticketsSold > 0 ? `/organizer/events/${event.id}/guests` : `/organizer/events/${event.id}`,
+      tone: "bg-[#e9f8ef] text-[#138a4a] border border-[#b7e8c7]",
+    };
+  }
+
+  if (["completed", "archived"].includes(event.publicationStatus)) {
+    return {
+      status: event.revenue > 0 ? "Требуется выплата" : "Завершено",
+      group: "past" as OrganizerEventsFilter,
+      action: event.revenue > 0 ? "Открыть выплату" : "Посмотреть итоги",
+      href: event.revenue > 0 ? "/organizer/money" : `/organizer/events/${event.id}`,
+      tone: event.revenue > 0
+        ? "bg-[#fff5dd] text-[#a76100] border border-[#ffd88c]"
+        : "bg-[#f8fafc] text-[#475569] border border-[#dde4ee]",
+    };
+  }
+
+  return {
+    status: "Скоро",
+    group: "upcoming" as OrganizerEventsFilter,
+    action: "Открыть событие",
+    href: `/organizer/events/${event.id}`,
+    tone: "bg-[#eaf4ff] text-[#0969b9] border border-[#b7ddff]",
+  };
+}
+
 function EventsList({ events }: OrganizerSurfaceProps) {
+  const [activeFilter, setActiveFilter] = useState<OrganizerEventsFilter>("all");
+  const eventRows = events.map((event, index) => ({
+    event,
+    index,
+    display: organizerEventDisplay(event),
+  }));
+  const visibleRows = activeFilter === "all"
+    ? eventRows
+    : eventRows.filter((row) => row.display.group === activeFilter);
+
   return (
-    <Card className="border-0 shadow-sm">
-      <CardHeader className="pb-2">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-base">My events</CardTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm"><Search className="h-4 w-4" /> Search</Button>
-            <Link href="/organizer/events/new"><Button size="sm"><Plus className="h-4 w-4" /> Create</Button></Link>
+    <div className="space-y-4">
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="text-base">Мои события</CardTitle>
+            <div className="flex flex-wrap gap-2">
+              {organizerEventFilters.map((filter) => {
+                const count = filter.id === "all"
+                  ? eventRows.length
+                  : eventRows.filter((row) => row.display.group === filter.id).length;
+                const active = filter.id === activeFilter;
+                return (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    onClick={() => setActiveFilter(filter.id)}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                      active
+                        ? "border-[#111827] bg-[#111827] text-white"
+                        : "border-[#d8e0ec] bg-white text-[#475569] hover:bg-[#f8fafc]",
+                    )}
+                  >
+                    {filter.label}
+                    <span className={cn("ml-2", active ? "text-white/70" : "text-[#647084]")}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[860px] text-sm">
-            <thead className="bg-secondary/60 text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2">Event</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Guests</th>
-                <th className="px-3 py-2">Revenue</th>
-                <th className="px-3 py-2">Main action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((event) => (
-                <tr key={event.id} className="border-t border-border">
-                  <td className="px-3 py-3">
-                    <p className="font-medium">{event.title}</p>
-                    <p className="text-xs text-muted-foreground">{event.venueName} · {event.date}</p>
-                  </td>
-                  <td className="px-3 py-3"><StatusBadge value={event.publicationStatus} type="publication" /></td>
-                  <td className="px-3 py-3">{event.ticketsSold}/{event.capacity}</td>
-                  <td className="px-3 py-3">{formatMoney(event.revenue)}</td>
-                  <td className="px-3 py-3">
-                    <div className="flex gap-2">
-                      <Link href={`/organizer/events/${event.id}`}><Button variant="outline" size="sm">Open</Button></Link>
-                      <Link href={`/organizer/events/${event.id}/guests`}><Button variant="outline" size="sm">Guests</Button></Link>
+        </CardHeader>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {visibleRows.map(({ event, index, display }) => (
+          <Card key={event.id} className="overflow-hidden border-0 shadow-sm">
+            <CardContent className="grid gap-4 p-4 sm:grid-cols-[148px_1fr]">
+              <div className="relative min-h-[132px] overflow-hidden rounded-xl bg-[#eef2f7]">
+                <Image
+                  src={demoEventCover(index)}
+                  alt={event.title}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 640px) 100vw, 148px"
+                />
+                <div className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-[#111827] shadow-sm">
+                  {event.category}
+                </div>
+              </div>
+              <div className="min-w-0 space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-base font-semibold">{event.title}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">{event.date}</p>
+                    <p className="text-sm text-muted-foreground">{event.venueName}</p>
+                  </div>
+                  <Badge className={display.tone}>{display.status}</Badge>
+                </div>
+
+                <div className="grid gap-2 text-sm text-[#475569] sm:grid-cols-2">
+                  <div className="rounded-xl bg-[#f8fafc] px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Гости</p>
+                    <p className="font-semibold text-[#111827]">{event.ticketsSold}/{event.capacity}</p>
+                  </div>
+                  {event.revenue > 0 && (
+                    <div className="rounded-xl bg-[#f8fafc] px-3 py-2">
+                      <p className="text-xs text-muted-foreground">Выручка</p>
+                      <p className="font-semibold text-[#111827]">{formatMoney(event.revenue)}</p>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+                  )}
+                </div>
+
+                <div className="flex justify-end">
+                  <Link href={display.href}>
+                    <Button size="sm" className="min-w-[160px]">{display.action}</Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }
 
