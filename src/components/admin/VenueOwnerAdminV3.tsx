@@ -7,7 +7,6 @@ import {
   Bot,
   CalendarDays,
   CheckCircle2,
-  Clock,
   FileText,
   Lock,
   MapPin,
@@ -262,6 +261,7 @@ export function VenueOwnerAdminV3({
   const [reviewReason, setReviewReason] = useState("");
 
   const currentSlug = activeSlug(screen, activeSurface);
+  const isOwnerToday = screen.slug === "dashboard";
   const selectedVenue = venues[0];
   const selectedClaim = currentSlug === "claim-needs-info" ? claims[1] : claims[0];
   const conflicts = useMemo(() => detectScheduleConflicts(ownerCalendarItems), []);
@@ -359,36 +359,49 @@ export function VenueOwnerAdminV3({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Владелец площадки</span>
             <span>/</span>
-            <span>Simple workspace</span>
+            <span>{isOwnerToday ? "Рабочая зона" : "Simple workspace"}</span>
           </div>
-          <h1 className="mt-2 text-2xl font-bold tracking-normal">{activeSurface.title ?? screen.title}</h1>
+          <h1 className="mt-2 text-2xl font-bold tracking-normal">
+            {isOwnerToday ? "Сегодня" : activeSurface.title ?? screen.title}
+          </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {activeSurface.description ?? screen.description}
+            {isOwnerToday ? "Что требует решения по вашим площадкам." : activeSurface.description ?? screen.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+          {!isOwnerToday && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
             <FileText className="h-4 w-4" />
             Preview states
-          </Button>
+          </Button>}
           <Link href="/owner/venues/new">
             <Button>
               <Plus className="h-4 w-4" />
-              Add place
+              {isOwnerToday ? "Добавить площадку" : "Add place"}
             </Button>
           </Link>
         </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Verified places" value={metrics.verifiedVenues} helper="Ready for requests" tone="good" />
-        <MetricCard label="Organizer requests" value={metrics.pendingAccess} helper="Need a decision" tone="warn" />
-        <MetricCard label="Event requests" value={metrics.pendingEvents} helper="Waiting for you" tone="info" />
-        <MetricCard label="Schedule conflicts" value={metrics.conflicts} helper="Need attention" tone="danger" />
+        {isOwnerToday ? (
+          <>
+            <MetricCard label="Мои площадки" value={venues.length} helper="Готово" tone="good" />
+            <MetricCard label="Заявки организаторов" value={metrics.pendingAccess} helper="Нужно решение" tone="warn" />
+            <MetricCard label="Заявки на события" value={metrics.pendingEvents} helper="Ждёт вас" tone="info" />
+            <MetricCard label="Конфликты календаря" value={metrics.conflicts} helper="Конфликт" tone="danger" />
+          </>
+        ) : (
+          <>
+            <MetricCard label="Verified places" value={metrics.verifiedVenues} helper="Ready for requests" tone="good" />
+            <MetricCard label="Organizer requests" value={metrics.pendingAccess} helper="Need a decision" tone="warn" />
+            <MetricCard label="Event requests" value={metrics.pendingEvents} helper="Waiting for you" tone="info" />
+            <MetricCard label="Schedule conflicts" value={metrics.conflicts} helper="Need attention" tone="danger" />
+          </>
+        )}
       </div>
 
-      <SectionTabs screen={screen} activeSurface={activeSurface} />
-      {showEdgeStates && (
+      {!isOwnerToday && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isOwnerToday && showEdgeStates && (
         <OperationalStatesPanel partialData={screen.partialData ?? activeSurface.partialData} permissionRole="venue_owner" />
       )}
 
@@ -515,72 +528,122 @@ function OwnerTodayView({
   accessRequests,
   eventRequests,
   conflicts,
-  audit,
 }: OwnerViewProps) {
-  const tasks = [
-    `${accessRequests.filter((request) => request.status === "pending").length} organizer access requests need review`,
-    `${eventRequests.filter((request) => request.status === "pending").length} external events waiting for your decision`,
-    `${conflicts.length} calendar conflicts require owner decision`,
-    "Gallery Loft needs address proof",
+  const pendingAccess = accessRequests.find((request) => request.status === "pending");
+  const pendingEvent = eventRequests.find((request) => request.status === "pending");
+  const calendarConflict = conflicts[0];
+  const venueNeedsData = venues.find((venue) => venue.claimStatus !== "approved") ?? venues[1] ?? venues[0];
+  const actionItems = [
+    {
+      title: "Организатор ждёт доступа к площадке",
+      description: `${pendingAccess?.organizerName ?? "Организатор"} хочет проводить события в ${pendingAccess?.venueName ?? venues[0]?.name ?? "вашей площадке"}.`,
+      status: "Нужно решение",
+      action: "Рассмотреть",
+      secondaryActions: ["Написать организатору", "Отклонить"],
+      href: "/owner/requests",
+      icon: Users,
+      tone: "bg-amber-50 text-amber-800 border-amber-200",
+    },
+    {
+      title: "Событие ждёт вашего решения",
+      description: `${pendingEvent?.event.title ?? "Новое событие"} просит дату в ${pendingEvent?.venueName ?? venues[0]?.name ?? "площадке"}.`,
+      status: "Ждёт вас",
+      action: "Одобрить",
+      secondaryActions: ["Написать организатору", "Отклонить"],
+      href: "/owner/requests",
+      icon: ShieldCheck,
+      tone: "bg-blue-50 text-blue-800 border-blue-200",
+    },
+    {
+      title: "Конфликт в календаре",
+      description: `${calendarConflict?.title ?? "Запрос на событие"} пересекается с другим бронированием.`,
+      status: "Конфликт",
+      action: "Открыть календарь",
+      href: "/owner/calendar",
+      icon: CalendarDays,
+      tone: "bg-red-50 text-red-800 border-red-200",
+    },
+    {
+      title: "Площадке нужны данные",
+      description: `${venueNeedsData?.name ?? "Площадке"} нужно добавить или подтвердить данные перед работой с заявками.`,
+      status: "Нужны данные",
+      action: "Добавить данные",
+      href: "/owner/places",
+      icon: MapPin,
+      tone: "bg-slate-50 text-slate-700 border-slate-200",
+    },
   ];
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Today</CardTitle>
+          <CardTitle className="text-base">Что требует внимания сегодня</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <InlineNotice
-            tone="warn"
-            title="Some data may be freshening up"
-            text="Calendar and request counts may lag by a few minutes. We label anything that needs your decision."
-          />
           <div className="grid gap-3 lg:grid-cols-2">
-            {tasks.map((task, index) => (
-              <div key={task} className="rounded-xl border border-border p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-800">
-                    {index === 0 ? <Users className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">{task}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Only for places you manage.</p>
+            {actionItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.title} className="rounded-xl border border-border p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-800">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold">{item.title}</p>
+                        <Badge variant="outline" className={item.tone}>{item.status}</Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                      <Link href={item.href}>
+                        <Button size="sm" variant="outline" className="mt-3">
+                          {item.action}
+                        </Button>
+                      </Link>
+                      {item.secondaryActions && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {item.secondaryActions.map((action) => (
+                            <Button key={action} size="sm" variant="ghost" className="h-8 px-2 text-xs">
+                              {action}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            {venues.map((venue) => (
-              <Link key={venue.id} href={`/owner/venues/${venue.id}`} className="group rounded-xl border border-border p-3 transition hover:bg-secondary/50">
-                <div className="relative h-24 overflow-hidden rounded-lg">
-                  <Image src={venue.coverImage} alt={venue.name} fill className="object-cover" sizes="280px" />
-                </div>
-                <p className="mt-3 text-sm font-semibold group-hover:underline">{venue.name}</p>
-                <p className="text-xs text-muted-foreground">{venue.utilizationWeek}% weekly utilization</p>
-                <StatusBadge value={venue.claimStatus} />
-              </Link>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Fast action</CardTitle>
+          <CardTitle className="text-base">Быстрые действия</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Button className="w-full justify-start" onClick={() => audit("Opened event requests", "Today queue")}>
-            <ShieldCheck className="h-4 w-4" />
-            Review event requests
-          </Button>
-          <Button variant="outline" className="w-full justify-start" onClick={() => audit("Checked conflicts", "Venue calendar")}>
-            <CalendarDays className="h-4 w-4" />
-            Resolve conflicts
-          </Button>
+          <Link href="/owner/requests" className="block">
+            <Button className="w-full justify-start">
+              <ShieldCheck className="h-4 w-4" />
+              Проверить заявки
+            </Button>
+          </Link>
+          <Link href="/owner/calendar" className="block">
+            <Button variant="outline" className="w-full justify-start">
+              <CalendarDays className="h-4 w-4" />
+              Открыть календарь
+            </Button>
+          </Link>
+          <Link href="/owner/venues/new" className="block">
+            <Button variant="outline" className="w-full justify-start">
+              <Plus className="h-4 w-4" />
+              Добавить площадку
+            </Button>
+          </Link>
           <InlineNotice
-            title="Your decisions"
-            text="You decide access, schedule and logistics for your places. Organizers keep control of their event content."
+            title="Что решаете вы"
+            text="Вы решаете, кто и когда может проводить события в ваших площадках. Организаторы управляют содержанием своих событий."
           />
         </CardContent>
       </Card>
