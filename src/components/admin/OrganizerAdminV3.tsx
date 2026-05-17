@@ -243,6 +243,10 @@ export function OrganizerAdminV3({
     screen.slug === "events" &&
     ["workspace", "guests", "chat", "promote", "event-money", "workspace-settings"].includes(currentSlug);
   const isMessagesSurface = screen.slug === "messages" && currentSlug === "messages";
+  const isProfileSurface =
+    screen.slug === "profile" ||
+    screen.slug === "reviews" ||
+    ["public-profile-preview", "review-response"].includes(currentSlug);
 
   useEffect(() => {
     setAiPrompt((current) => (
@@ -363,7 +367,9 @@ export function OrganizerAdminV3({
           <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Badge className="bg-[#eef2ff] text-[#3949d7] border-0">{roleLabels.organizer}</Badge>
-              <Badge className="bg-[#f8fafc] text-[#475569] border border-[#dde4ee]">Simple workspace</Badge>
+              <Badge className="bg-[#f8fafc] text-[#475569] border border-[#dde4ee]">
+                {isProfileSurface ? "Публичный профиль" : "Simple workspace"}
+              </Badge>
             </div>
             <h1 className="text-2xl font-bold tracking-normal">
               {isTodaySurface
@@ -372,6 +378,8 @@ export function OrganizerAdminV3({
                   ? "События"
                   : isMessagesSurface
                     ? "Сообщения"
+                    : isProfileSurface
+                      ? "Профиль организатора"
                     : isCreateSurface
                       ? "Create Event"
                       : activeSurface.title}
@@ -383,22 +391,26 @@ export function OrganizerAdminV3({
                   ? "Управляйте черновиками, ближайшими и прошедшими событиями."
                   : isMessagesSurface
                     ? "Ответы участникам, владельцам площадок и черновики ИИ."
+                    : isProfileSurface
+                      ? "Настройте публичную страницу, описание и доверие."
                   : activeSurface.description}
             </p>
           </div>
           {!isCreateSurface && (
             <div className="flex flex-wrap gap-2">
-              {!isTodaySurface && !isEventsListSurface && !isMessagesSurface && (
+              {!isTodaySurface && !isEventsListSurface && !isMessagesSurface && !isProfileSurface && (
                 <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
                   <AlertTriangle className="h-4 w-4" />
                   Preview states
                 </Button>
               )}
-              <Link href={isMessagesSurface ? "/organizer/events/evt_123/announcements" : "/organizer/events/new"}>
+              <Link href={isMessagesSurface ? "/organizer/events/evt_123/announcements" : isProfileSurface ? "/organizer/profile/preview" : "/organizer/events/new"}>
                 <Button className="bg-primary hover:bg-primary/90">
                   <Plus className="h-4 w-4" />
                   {isMessagesSurface
                     ? "Создать объявление"
+                    : isProfileSurface
+                      ? "Предпросмотр"
                     : isTodaySurface || isEventsListSurface
                       ? "Создать событие"
                       : "Create event"}
@@ -409,9 +421,9 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
 
-      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && (
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metrics.map((metric) => (
             <MetricCard key={metric.label} {...metric} />
@@ -419,7 +431,7 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
 
       {renderOrganizerSurface({
         screen,
@@ -450,7 +462,7 @@ export function OrganizerAdminV3({
         publishSelectedEvent,
       })}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && (
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && (
         <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <OperationalStatesPanel partialData={screen.partialData || activeSurface.partialData} permissionRole="organizer" />
           <AuditLogPanel logs={auditLogs.filter((log) => log.actorRole === "organizer")} localLogs={localAudit} />
@@ -2357,44 +2369,184 @@ function OrganizerFinanceView({ currentSlug, ledgerEntries, selectedEvent, audit
   );
 }
 
+const organizerProfileReviews = [
+  {
+    text: "Очень тёплый формат: ведущий помог всем познакомиться без неловкости.",
+    author: "Maya Chen",
+    event: "Sunset Singles Mixer",
+  },
+  {
+    text: "Понятные правила, хорошая музыка и быстрые ответы перед событием.",
+    author: "Jordan Blake",
+    event: "AI Networking Breakfast",
+  },
+  {
+    text: "Хочу больше вариантов для гостей с особыми пожеланиями по еде.",
+    author: "Emma Wilson",
+    event: "Candlelit Ceramics Workshop",
+  },
+];
+
+const organizerProfileCompleteness = [
+  { label: "Аватар", value: "Добавлен" },
+  { label: "Обложка", value: "Добавлена" },
+  { label: "Описание", value: "Заполнено" },
+  { label: "Соцсети", value: "Добавьте сайт" },
+  { label: "Доверие", value: "Подтвердите контакт" },
+];
+
+function OrganizerPublicProfileCard() {
+  return (
+    <Card className="overflow-hidden border-0 shadow-sm">
+      <div className="relative h-40 bg-[#eef2f7]">
+        <Image src={demoEventCovers.sunsetMixer} alt="Обложка организатора" fill className="object-cover" sizes="(max-width: 1024px) 100vw, 520px" />
+      </div>
+      <CardContent className="space-y-4 p-5">
+        <div className="-mt-12 flex items-end gap-4">
+          <div className="relative h-20 w-20 overflow-hidden rounded-2xl border-4 border-white bg-white shadow-sm">
+            <Image src="/demo/avatars/avatar-01.png" alt="Аватар организатора" fill className="object-cover" sizes="80px" />
+          </div>
+          <div className="pb-1">
+            <h2 className="text-xl font-bold tracking-normal text-[#111827]">The Penmar Events</h2>
+            <p className="text-sm text-muted-foreground">Los Angeles · Venice</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Badge className="border border-emerald-200 bg-emerald-50 text-emerald-700">4.8 рейтинг</Badge>
+          <Badge className="border border-[#dde4ee] bg-white text-[#475569]">12 ближайших событий</Badge>
+          <Badge className="border border-[#dde4ee] bg-white text-[#475569]">Социальные встречи</Badge>
+          <Badge className="border border-[#dde4ee] bg-white text-[#475569]">Музыка</Badge>
+        </div>
+
+        <p className="text-sm leading-relaxed text-[#475569]">
+          Организуем тёплые социальные события с понятными правилами, дружелюбным ведущим и безопасным общением для гостей.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function OrganizerProfileView({ currentSlug, audit }: OrganizerSurfaceProps) {
+  const reviewsOnly = currentSlug === "reviews" || currentSlug === "review-response";
+
   if (currentSlug === "public-profile-preview") {
     return (
-      <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-        <PublicPreviewFrame href="/host/org1" />
-        <InfoBlock title="Preview QA" rows={["Public route resolves", "Mobile layout checked", "Broken links surfaced", "Missing fields block publish"]} />
+      <div className="grid gap-6 xl:grid-cols-[520px_1fr]">
+        <OrganizerPublicProfileCard />
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Предпросмотр профиля</CardTitle></CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>Так гости видят карточку организатора перед покупкой билета или заявкой на событие.</p>
+            <Link href="/host/org1">
+              <Button variant="outline">Открыть публичную страницу</Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }
-  if (currentSlug === "reviews" || currentSlug === "review-response") {
+
+  if (reviewsOnly) {
     return (
       <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-2"><CardTitle className="text-base">Reviews & responses</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base">Отзывы и доверие</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          {["Great format and thoughtful host.", "Venue directions were clear.", "Would love more vegetarian options."].map((review) => (
-            <div key={review} className="rounded-xl border border-border p-4">
-              <p className="text-sm">{review}</p>
-              <Button className="mt-3" variant="outline" size="sm" onClick={() => audit("Review response drafted", review)}>Respond</Button>
+          <div className="grid gap-3 md:grid-cols-4">
+            <MetricCard label="Рейтинг" value="4.8" helper="средняя оценка" tone="good" />
+            <MetricCard label="Отзывы" value="38" helper="от гостей" tone="info" />
+            <MetricCard label="Профиль" value="подтверждён" helper="доверие гостей" tone="good" />
+            <MetricCard label="Ответ" value="2 ч" helper="обычно отвечаете" tone="neutral" />
+          </div>
+          {organizerProfileReviews.map((review) => (
+            <div key={`${review.author}-${review.event}`} className="rounded-xl border border-border p-4">
+              <p className="text-sm text-[#111827]">{review.text}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{review.author} · {review.event}</p>
+              <Button className="mt-3" variant="outline" size="sm" onClick={() => audit("Ответ на отзыв подготовлен", review.event)}>
+                Ответить на отзыв
+              </Button>
             </div>
           ))}
         </CardContent>
       </Card>
     );
   }
+
   return (
-    <Card className="border-0 shadow-sm">
-      <CardHeader className="pb-2"><CardTitle className="text-base">Organizer profile editor</CardTitle></CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-[180px_1fr]">
-        <div className="relative h-40 overflow-hidden rounded-xl">
-          <Image src={demoEventCovers.sunsetMixer} alt="Organizer cover" fill className="object-cover" sizes="180px" />
-        </div>
-        <div className="space-y-3">
-          <input className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" defaultValue="The Penmar Events" />
-          <textarea className="h-24 w-full resize-none rounded-lg border border-input bg-background p-3 text-sm" defaultValue="Curated social events with warm hosting and clear safety expectations." />
-          <Button onClick={() => audit("Profile saved", "The Penmar Events")}>Save profile</Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="grid gap-6 xl:grid-cols-[520px_1fr]">
+      <OrganizerPublicProfileCard />
+
+      <div className="space-y-6">
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Редактирование профиля</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <label className="grid gap-1.5 text-sm">
+              <span className="font-medium">Название организатора</span>
+              <input className="h-10 rounded-lg border border-input bg-background px-3 text-sm" defaultValue="The Penmar Events" />
+            </label>
+            <label className="grid gap-1.5 text-sm">
+              <span className="font-medium">Описание</span>
+              <textarea
+                className="h-24 resize-none rounded-lg border border-input bg-background p-3 text-sm"
+                defaultValue="Организуем тёплые социальные события с понятными правилами, дружелюбным ведущим и безопасным общением для гостей."
+              />
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1.5 text-sm">
+                <span className="font-medium">Категории и интересы</span>
+                <input className="h-10 rounded-lg border border-input bg-background px-3 text-sm" defaultValue="Социальные встречи, музыка, нетворкинг" />
+              </label>
+              <label className="grid gap-1.5 text-sm">
+                <span className="font-medium">Соцсети</span>
+                <input className="h-10 rounded-lg border border-input bg-background px-3 text-sm" defaultValue="@thepenmarevents" />
+              </label>
+            </div>
+            <label className="grid gap-1.5 text-sm">
+              <span className="font-medium">Как с вами связываться</span>
+              <select className="h-10 rounded-lg border border-input bg-background px-3 text-sm" defaultValue="messages">
+                <option value="messages">Сообщения в SparkIRL</option>
+                <option value="email">Email для гостей</option>
+              </select>
+            </label>
+            <Button onClick={() => audit("Профиль сохранён", "The Penmar Events")}>Сохранить профиль</Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Отзывы и доверие</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-4">
+              <MetricCard label="Рейтинг" value="4.8" helper="средняя оценка" tone="good" />
+              <MetricCard label="Отзывы" value="38" helper="от гостей" tone="info" />
+              <MetricCard label="Профиль" value="подтверждён" helper="доверие гостей" tone="good" />
+              <MetricCard label="Ответ" value="2 ч" helper="обычно отвечаете" tone="neutral" />
+            </div>
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-sm text-[#111827]">{organizerProfileReviews[0].text}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{organizerProfileReviews[0].author} · {organizerProfileReviews[0].event}</p>
+              <Button className="mt-3" variant="outline" size="sm" onClick={() => audit("Ответ на отзыв подготовлен", organizerProfileReviews[0].event)}>
+                Ответить на отзыв
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-base">Заполненность профиля</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {organizerProfileCompleteness.map((item) => (
+              <div key={item.label} className="flex items-center justify-between rounded-xl border border-border p-3 text-sm">
+                <span className="font-medium text-[#111827]">{item.label}</span>
+                <span className="text-muted-foreground">{item.value}</span>
+              </div>
+            ))}
+            <div className="rounded-xl bg-[#fff7ed] p-3 text-sm text-[#9a3412]">
+              Следующее действие: добавьте сайт и подтвердите контакт, чтобы гостям было проще вам доверять.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }
 
