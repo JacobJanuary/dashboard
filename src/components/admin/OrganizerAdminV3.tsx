@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   AlertTriangle,
   CalendarDays,
@@ -212,6 +213,7 @@ export function OrganizerAdminV3({
   activeSurface: AdminScreenSurface;
 }) {
   const { locale } = useLanguage();
+  const pathname = usePathname();
   const [events, setEvents] = useState<AdminEvent[]>(() => getInitialOrganizerEvents());
   const [wizard, setWizard] = useState<CreateEventWizardState>(initialWizardState);
   const [aiPrompt, setAiPrompt] = useState(aiCreatePromptDefaults.en);
@@ -247,6 +249,7 @@ export function OrganizerAdminV3({
     screen.slug === "profile" ||
     screen.slug === "reviews" ||
     ["public-profile-preview", "review-response"].includes(currentSlug);
+  const isMoneySurface = screen.slug === "money" && ["/organizer/money", "/organizer/payouts"].includes(pathname);
 
   useEffect(() => {
     setAiPrompt((current) => (
@@ -368,7 +371,7 @@ export function OrganizerAdminV3({
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Badge className="bg-[#eef2ff] text-[#3949d7] border-0">{roleLabels.organizer}</Badge>
               <Badge className="bg-[#f8fafc] text-[#475569] border border-[#dde4ee]">
-                {isProfileSurface ? "Публичный профиль" : "Simple workspace"}
+                {isProfileSurface ? "Публичный профиль" : isMoneySurface ? "Финансы" : "Simple workspace"}
               </Badge>
             </div>
             <h1 className="text-2xl font-bold tracking-normal">
@@ -380,6 +383,8 @@ export function OrganizerAdminV3({
                     ? "Сообщения"
                     : isProfileSurface
                       ? "Профиль организатора"
+                      : isMoneySurface
+                        ? "Деньги"
                     : isCreateSurface
                       ? "Create Event"
                       : activeSurface.title}
@@ -393,24 +398,28 @@ export function OrganizerAdminV3({
                     ? "Ответы участникам, владельцам площадок и черновики ИИ."
                     : isProfileSurface
                       ? "Настройте публичную страницу, описание и доверие."
+                      : isMoneySurface
+                        ? "Выручка, выплаты и возвраты по вашим событиям."
                   : activeSurface.description}
             </p>
           </div>
           {!isCreateSurface && (
             <div className="flex flex-wrap gap-2">
-              {!isTodaySurface && !isEventsListSurface && !isMessagesSurface && !isProfileSurface && (
+              {!isTodaySurface && !isEventsListSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && (
                 <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
                   <AlertTriangle className="h-4 w-4" />
                   Preview states
                 </Button>
               )}
-              <Link href={isMessagesSurface ? "/organizer/events/evt_123/announcements" : isProfileSurface ? "/organizer/profile/preview" : "/organizer/events/new"}>
+              <Link href={isMessagesSurface ? "/organizer/events/evt_123/announcements" : isProfileSurface ? "/organizer/profile/preview" : isMoneySurface ? "/organizer/money" : "/organizer/events/new"}>
                 <Button className="bg-primary hover:bg-primary/90">
                   <Plus className="h-4 w-4" />
                   {isMessagesSurface
                     ? "Создать объявление"
                     : isProfileSurface
                       ? "Предпросмотр"
+                      : isMoneySurface
+                        ? "Настроить выплаты"
                     : isTodaySurface || isEventsListSurface
                       ? "Создать событие"
                       : "Create event"}
@@ -421,9 +430,9 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
 
-      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && (
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metrics.map((metric) => (
             <MetricCard key={metric.label} {...metric} />
@@ -431,7 +440,7 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
 
       {renderOrganizerSurface({
         screen,
@@ -462,7 +471,7 @@ export function OrganizerAdminV3({
         publishSelectedEvent,
       })}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && (
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && (
         <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <OperationalStatesPanel partialData={screen.partialData || activeSurface.partialData} permissionRole="organizer" />
           <AuditLogPanel logs={auditLogs.filter((log) => log.actorRole === "organizer")} localLogs={localAudit} />
@@ -2318,9 +2327,137 @@ function OrganizerPromotionView({ currentSlug, campaigns, setCampaigns, audit }:
 }
 
 function OrganizerFinanceView({ currentSlug, ledgerEntries, selectedEvent, audit }: OrganizerSurfaceProps) {
+  const pathname = usePathname();
   const totals = calculateLedgerTotals(ledgerEntries);
+  const isTopLevelMoney = ["/organizer/money", "/organizer/payouts"].includes(pathname);
   const isRefunds = currentSlug === "refunds";
   const isDisputes = currentSlug === "disputes";
+
+  if (isTopLevelMoney) {
+    const available = Math.max(totals.gross - totals.fees, 0);
+    const refundTotal = Math.abs(
+      ledgerEntries.filter((entry) => entry.type === "refund").reduce((sum, entry) => sum + entry.amount, 0),
+    );
+    const revenueRows = [
+      {
+        event: "Sunset Singles Mixer",
+        tickets: "42/80",
+        gross: formatMoney(1050),
+        fees: formatMoney(84),
+        net: formatMoney(966),
+        status: "Готово к выплате",
+        tone: "bg-[#ecfdf5] text-[#047857] border border-[#a7f3d0]",
+      },
+      {
+        event: "AI Networking Breakfast",
+        tickets: "28/60",
+        gross: formatMoney(625),
+        fees: formatMoney(50),
+        net: formatMoney(541),
+        status: "Ожидает обработки",
+        tone: "bg-[#fff5dd] text-[#a76100] border border-[#ffd88c]",
+      },
+      {
+        event: "Late Night Warehouse Party",
+        tickets: "0/120",
+        gross: formatMoney(0),
+        fees: formatMoney(0),
+        net: formatMoney(0),
+        status: "Нужны данные для выплаты",
+        tone: "bg-[#fff0ef] text-[#c52b20] border border-[#ffb3ad]",
+      },
+    ];
+    const setupRows = [
+      ["Способ выплаты", "Добавлен"],
+      ["Налоговая информация", "Нужны данные для выплаты"],
+      ["Подтверждение личности", "Добавьте данные"],
+    ];
+
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-3 md:grid-cols-4">
+          <MetricCard label="Доступно к выплате" value={formatMoney(available)} helper="после комиссий" tone="good" />
+          <MetricCard label="Ожидает выплаты" value={formatMoney(totals.pending)} helper="следующая обработка" tone="warn" />
+          <MetricCard label="Выручка за месяц" value={formatMoney(totals.gross)} helper="по билетам" tone="info" />
+          <MetricCard label="Возвраты" value={formatMoney(refundTotal)} helper="нет новых списаний" tone="neutral" />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+          <div className="space-y-6">
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2"><CardTitle className="text-base">Статус выплаты</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <InfoRow label="Следующая сумма" value={formatMoney(totals.pending)} />
+                  <InfoRow label="Ожидаемая дата" value="Завтра" />
+                  <InfoRow label="Подготовка" value="Нужны данные для выплаты" />
+                  <InfoRow label="Последняя выплата" value="Выплачено" />
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                  Добавьте налоговую информацию и подтвердите личность, чтобы следующая выплата прошла без задержки.
+                </div>
+                <Button onClick={() => audit("Открыли настройки выплат", "Деньги")}>Добавить данные</Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2"><CardTitle className="text-base">Выручка по событиям</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {revenueRows.map((row) => (
+                  <div key={row.event} className="grid gap-3 rounded-xl border border-border p-4 lg:grid-cols-[1.3fr_repeat(5,minmax(88px,auto))] lg:items-center">
+                    <div>
+                      <p className="font-semibold text-[#111827]">{row.event}</p>
+                      <p className="text-xs text-muted-foreground">Билеты: {row.tickets}</p>
+                    </div>
+                    <InfoRow label="Выручка" value={row.gross} />
+                    <InfoRow label="Комиссии" value={row.fees} />
+                    <InfoRow label="К выплате" value={row.net} />
+                    <Badge className={row.tone}>{row.status}</Badge>
+                    <Button size="sm" variant="outline" onClick={() => audit("Открыли событие", row.event)}>Открыть событие</Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2"><CardTitle className="text-base">Возвраты и споры</CardTitle></CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-border p-4">
+                  <Badge className="border border-[#ffd88c] bg-[#fff5dd] text-[#a76100]">Возврат запрошен</Badge>
+                  <p className="mt-3 font-semibold text-[#111827]">1 запрос на возврат</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Гость просит вернуть билет в разрешённый срок.</p>
+                  <Button className="mt-3" size="sm" variant="outline" onClick={() => audit("Проверили возврат", selectedEvent.title)}>Проверить возврат</Button>
+                </div>
+                <div className="rounded-xl border border-border p-4">
+                  <Badge className="border border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]">Возврат выполнен</Badge>
+                  <p className="mt-3 font-semibold text-[#111827]">{formatMoney(refundTotal)} возвращено</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Новых спорных платежей нет.</p>
+                  <Button className="mt-3" size="sm" variant="outline" onClick={() => audit("Открыли детали возвратов", "Деньги")}>Посмотреть детали</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2"><CardTitle className="text-base">Настройка выплат</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              {setupRows.map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between rounded-xl border border-border p-3 text-sm">
+                  <span className="font-medium text-[#111827]">{label}</span>
+                  <span className="text-muted-foreground">{value}</span>
+                </div>
+              ))}
+              <div className="rounded-xl bg-[#fff7ed] p-3 text-sm text-[#9a3412]">
+                Следующее действие: добавьте данные для выплаты.
+              </div>
+              <Button className="w-full" onClick={() => audit("Открыли настройки выплат", "Деньги")}>Настроить выплаты</Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
       <Card className="border-0 shadow-sm">
