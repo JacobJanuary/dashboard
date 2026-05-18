@@ -89,6 +89,12 @@ function formatMoney(value: number) {
   return `$${value.toLocaleString()}`;
 }
 
+function ownerTodayConflictTitle(title?: string) {
+  if (!title) return "Запрос на событие";
+  if (title === "Wine social request") return "Заявка на винный вечер";
+  return title;
+}
+
 const ownerSurfaceHrefs: Record<string, string> = {
   dashboard: "/owner",
   venues: "/owner/venues",
@@ -598,7 +604,7 @@ function OwnerTodayView({
     },
     {
       title: "Конфликт в календаре",
-      description: `${calendarConflict?.title ?? "Запрос на событие"} пересекается с другим бронированием.`,
+      description: `${ownerTodayConflictTitle(calendarConflict?.title)} пересекается с другим бронированием.`,
       status: "Конфликт",
       action: "Открыть календарь",
       href: "/owner/calendar",
@@ -1164,6 +1170,13 @@ function ownerOrganizerHistoryText(text: string) {
   return text;
 }
 
+function ownerRequestNoteText(text: string) {
+  if (text.includes("late-night event") || text.includes("safety plan")) {
+    return "Планируется ночное мероприятие. Нужен план безопасности.";
+  }
+  return text;
+}
+
 function OwnerRequestsInbox({
   accessRequests,
   eventRequests,
@@ -1209,7 +1222,7 @@ function OwnerRequestsInbox({
               </div>
               <div className="rounded-xl border border-border p-3 text-sm">
                 <p className="text-xs text-muted-foreground">Сообщение организатора</p>
-                <p className="mt-1">{request.note}</p>
+                <p className="mt-1">{ownerRequestNoteText(request.note)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm">Рассмотреть</Button>
