@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   CheckCircle2,
   FileText,
@@ -333,7 +334,9 @@ export function ModeratorAdminV3({
   const [toast, setToast] = useState("");
   const [showEdgeStates, setShowEdgeStates] = useState(false);
 
+  const pathname = usePathname();
   const currentSlug = activeSlug(screen, activeSurface);
+  const isModeratorQueue = screen.slug === "dashboard" && pathname === "/moderator";
   const metrics = useMemo(
     () => ({
       open: queue.filter((item) => item.status !== "closed").length,
@@ -450,41 +453,57 @@ export function ModeratorAdminV3({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Модератор</span>
             <span>/</span>
-            <span>Case workspace</span>
+            <span>{isModeratorQueue ? "Рабочая зона" : "Case workspace"}</span>
           </div>
-          <h1 className="mt-2 text-2xl font-bold tracking-normal">{activeSurface.title ?? screen.title}</h1>
+          <h1 className="mt-2 text-2xl font-bold tracking-normal">
+            {isModeratorQueue ? "Очередь" : activeSurface.title ?? screen.title}
+          </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            {activeSurface.description ?? screen.description}
+            {isModeratorQueue
+              ? "Кейсы модерации: события, жалобы, чаты, права и апелляции."
+              : activeSurface.description ?? screen.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+          {!isModeratorQueue && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
             <FileText className="h-4 w-4" />
             Preview states
-          </Button>
+          </Button>}
           <Link href="/moderator">
             <Button>
               <Scale className="h-4 w-4" />
-              Queue
+              {isModeratorQueue ? "Открыть очередь" : "Queue"}
             </Button>
           </Link>
         </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Open cases" value={metrics.open} helper="Queue" tone="info" />
-        <MetricCard label="Urgent" value={metrics.critical} helper="High priority" tone="danger" />
-        <MetricCard label="Saved context" value={metrics.evidence} helper="For review" tone="neutral" />
-        <MetricCard label="Due soon" value={metrics.sla} helper="Needs action" tone="warn" />
+        {isModeratorQueue ? (
+          <>
+            <MetricCard label="Открытые кейсы" value={metrics.open} helper="Все очереди" tone="info" />
+            <MetricCard label="Срочные" value={metrics.critical} helper="Критический приоритет" tone="danger" />
+            <MetricCard label="На проверке" value={metrics.evidence} helper="Материалы" tone="neutral" />
+            <MetricCard label="Скоро дедлайн" value={metrics.sla} helper="Нужно действие" tone="warn" />
+          </>
+        ) : (
+          <>
+            <MetricCard label="Open cases" value={metrics.open} helper="Queue" tone="info" />
+            <MetricCard label="Urgent" value={metrics.critical} helper="High priority" tone="danger" />
+            <MetricCard label="Saved context" value={metrics.evidence} helper="For review" tone="neutral" />
+            <MetricCard label="Due soon" value={metrics.sla} helper="Needs action" tone="warn" />
+          </>
+        )}
       </div>
 
-      <SectionTabs screen={screen} activeSurface={activeSurface} />
-      {showEdgeStates && (
+      {!isModeratorQueue && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isModeratorQueue && showEdgeStates && (
         <OperationalStatesPanel partialData={screen.partialData ?? activeSurface.partialData} permissionRole="moderator" />
       )}
 
       {renderModeratorSurface({
         screen,
+        isModeratorQueue,
         currentSlug,
         queue,
         eventReviews,
@@ -518,6 +537,7 @@ export function ModeratorAdminV3({
 
 type ModeratorViewProps = {
   screen: AdminScreenDefinition;
+  isModeratorQueue: boolean;
   currentSlug: string;
   queue: ModeratorQueueItem[];
   eventReviews: ModeratorEventReview[];
@@ -583,7 +603,235 @@ function renderModeratorSurface(props: ModeratorViewProps) {
   return <ModeratorQueueView {...props} />;
 }
 
-function ModeratorQueueView({ currentSlug, queue, audit }: ModeratorViewProps) {
+function moderatorQueueKindLabel(kind: ModeratorQueueItem["kind"]) {
+  const labels: Record<ModeratorQueueItem["kind"], string> = {
+    event: "Событие",
+    complaint: "Жалоба",
+    chat: "Чат",
+    claim: "Права",
+    ai: "Нарушение",
+    promotion: "Промо",
+    enforcement: "Нарушение",
+    appeal: "Апелляция",
+  };
+  return labels[kind];
+}
+
+function moderatorQueueSeverityLabel(severity: ModeratorQueueItem["severity"]) {
+  const labels: Record<ModeratorQueueItem["severity"], string> = {
+    low: "Низкий",
+    medium: "Средний",
+    high: "Высокий",
+    critical: "Критический",
+  };
+  return labels[severity];
+}
+
+function moderatorQueueSeverityClass(severity: ModeratorQueueItem["severity"]) {
+  if (severity === "critical") return "border-red-200 bg-red-50 text-red-800";
+  if (severity === "high") return "border-orange-200 bg-orange-50 text-orange-800";
+  if (severity === "medium") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-emerald-200 bg-emerald-50 text-emerald-800";
+}
+
+function moderatorQueueTitle(item: ModeratorQueueItem) {
+  if (item.kind === "event") return "Проверка события: Sunset Singles Mixer";
+  if (item.kind === "complaint") return "Жалоба: сообщения в чате";
+  if (item.kind === "promotion") return "Промо: Warehouse Flash Sale";
+  if (item.kind === "enforcement") return "Нарушение: заявка площадки";
+  return item.title;
+}
+
+function moderatorQueueSummary(item: ModeratorQueueItem) {
+  if (item.kind === "event") return "Проверьте площадку, возвраты и промо-текст перед публикацией.";
+  if (item.kind === "complaint") return "Есть жалоба на поведение в чате, нужна оценка безопасности.";
+  if (item.kind === "promotion") return "Промо остановлено до проверки площадки и рекламного текста.";
+  if (item.kind === "enforcement") return "Возможна подмена площадки, нужны материалы перед решением.";
+  return item.summary;
+}
+
+function moderatorQueueDueLabel(dueAt: string) {
+  if (dueAt === "Now") return "Сейчас";
+  if (dueAt.endsWith("m")) return `${dueAt.replace("m", "")} мин`;
+  return dueAt;
+}
+
+function moderatorQueueAssigneeLabel(assignee: string) {
+  if (assignee === "Unassigned") return "Не назначен";
+  if (assignee === "Senior mod") return "Старший модератор";
+  return assignee;
+}
+
+function moderatorQueueActionLabel(item: ModeratorQueueItem) {
+  if (item.kind === "promotion" || item.severity === "critical") return "Эскалировать";
+  if (item.kind === "enforcement") return "Запросить данные";
+  if (item.kind === "event") return "Рассмотреть";
+  return "Открыть кейс";
+}
+
+function materialCountLabel(count: number) {
+  if (count === 1) return "1 материал";
+  if (count > 1 && count < 5) return `${count} материала`;
+  return `${count} материалов`;
+}
+
+function ModeratorQueueDecisionPanel({ audit }: { audit: ModeratorViewProps["audit"] }) {
+  const [reasonCode, setReasonCode] = useState("");
+  const [policySection, setPolicySection] = useState("");
+  const [note, setNote] = useState("Проверить материалы кейса и зафиксировать решение.");
+  const disabled = !reasonCode || !policySection || !note.trim();
+
+  const emit = (decision: string) => {
+    if (disabled) return;
+    audit({
+      action: decision,
+      entity: "Очередь модерации",
+      reasonCode,
+      policySection,
+      evidenceId: "Материалы кейса",
+    });
+  };
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Решение по кейсу</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <InlineNotice
+          tone="warn"
+          title="Причина обязательна"
+          text="Перед действием выберите код причины, раздел политики и добавьте заметку."
+        />
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Код причины</span>
+          <select
+            value={reasonCode}
+            onChange={(event) => setReasonCode(event.target.value)}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Выберите причину</option>
+            <option value="policy_clear">Правила соблюдены</option>
+            <option value="missing_safety_plan">Нужен план безопасности</option>
+            <option value="harassment">Жалоба на поведение</option>
+            <option value="ownership_mismatch">Нужно подтвердить права</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Раздел политики</span>
+          <input
+            value={policySection}
+            onChange={(event) => setPolicySection(event.target.value)}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+            placeholder="Безопасность / Права / Промо"
+          />
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Заметка</span>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={3}
+            className="resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={disabled} onClick={() => emit("Рассмотреть")}>
+            Рассмотреть
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Запросить данные")}>
+            Запросить данные
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Эскалировать")}>
+            Эскалировать
+          </Button>
+          <Button variant="destructive" disabled={disabled} onClick={() => emit("Ограничить")}>
+            Ограничить
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModeratorQueueCard({ item }: { item: ModeratorQueueItem }) {
+  return (
+    <Link href={item.href} className="block rounded-xl border border-border p-4 transition hover:bg-secondary/50">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold">{moderatorQueueTitle(item)}</p>
+            <Badge variant="outline">{moderatorQueueKindLabel(item.kind)}</Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">{moderatorQueueSummary(item)}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Ответственный: {moderatorQueueAssigneeLabel(item.assignee)} · Срок: {moderatorQueueDueLabel(item.dueAt)} · Материалы: {materialCountLabel(item.evidenceCount)}
+          </p>
+        </div>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", moderatorQueueSeverityClass(item.severity))}>
+            {moderatorQueueSeverityLabel(item.severity)}
+          </span>
+          <Button size="sm" variant="outline">
+            {moderatorQueueActionLabel(item)}
+          </Button>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function ModeratorQueueView({ currentSlug, queue, audit, isModeratorQueue }: ModeratorViewProps) {
+  if (isModeratorQueue) {
+    const filters = ["Все", "События", "Жалобы", "Чаты", "Права", "Промо", "Апелляции", "Срочные"];
+    const visibleQueue: ModeratorQueueItem[] = [
+      ...queue,
+      {
+        id: "display_appeal_low",
+        kind: "appeal",
+        title: "Апелляция: повторная проверка решения",
+        severity: "low",
+        status: "open",
+        assignee: "Nina M.",
+        dueAt: "Сегодня, 18:00",
+        evidenceCount: 1,
+        href: "/moderator/appeals",
+        summary: "Проверьте новую информацию и предыдущее решение.",
+      },
+    ];
+    return (
+      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {filters.map((filter) => (
+              <Button key={filter} variant={filter === "Все" ? "default" : "outline"} size="sm">
+                {filter}
+              </Button>
+            ))}
+          </div>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Все кейсы</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {visibleQueue.map((item) => (
+                <ModeratorQueueCard key={item.id} item={item} />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+        <div className="space-y-4">
+          <InlineNotice
+            tone="warn"
+            title="Что проверить"
+            text="Проверьте тип кейса, материалы, срок и ответственного перед действием."
+          />
+          <ModeratorQueueDecisionPanel audit={audit} />
+        </div>
+      </div>
+    );
+  }
+
   if (currentSlug === "empty-review-queue") {
     return (
       <Card className="border-0 shadow-sm">
