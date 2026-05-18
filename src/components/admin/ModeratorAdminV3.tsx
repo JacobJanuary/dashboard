@@ -339,6 +339,7 @@ export function ModeratorAdminV3({
   const currentSlug = activeSlug(screen, activeSurface);
   const isModeratorQueue = screen.slug === "dashboard" && normalizedPathname === "/moderator";
   const isModeratorEvents = normalizedPathname === "/moderator/events";
+  const isModeratorClaims = normalizedPathname === "/moderator/hosts" || normalizedPathname.startsWith("/moderator/claims");
   const metrics = useMemo(
     () => ({
       open: queue.filter((item) => item.status !== "closed").length,
@@ -455,34 +456,38 @@ export function ModeratorAdminV3({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Модератор</span>
             <span>/</span>
-            <span>{isModeratorQueue ? "Рабочая зона" : isModeratorEvents ? "События" : "Case workspace"}</span>
+            <span>
+              {isModeratorQueue ? "Рабочая зона" : isModeratorEvents ? "События" : isModeratorClaims ? "Права" : "Case workspace"}
+            </span>
           </div>
           <h1 className="mt-2 text-2xl font-bold tracking-normal">
-            {isModeratorQueue ? "Очередь" : isModeratorEvents ? "События" : activeSurface.title ?? screen.title}
+            {isModeratorQueue ? "Очередь" : isModeratorEvents ? "События" : isModeratorClaims ? "Права" : activeSurface.title ?? screen.title}
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             {isModeratorQueue
               ? "Кейсы модерации: события, жалобы, чаты, права и апелляции."
               : isModeratorEvents
                 ? "Проверка событий перед публикацией и после жалоб."
+              : isModeratorClaims
+                ? "Проверка прав на организации и площадки."
               : activeSurface.description ?? screen.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!isModeratorQueue && !isModeratorEvents && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+          {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
             <FileText className="h-4 w-4" />
             Preview states
           </Button>}
           <Link href="/moderator">
             <Button>
               <Scale className="h-4 w-4" />
-              {isModeratorQueue || isModeratorEvents ? "Открыть очередь" : "Queue"}
+              {isModeratorQueue || isModeratorEvents || isModeratorClaims ? "Открыть очередь" : "Queue"}
             </Button>
           </Link>
         </div>
       </div>
 
-      {!isModeratorEvents && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {!isModeratorEvents && !isModeratorClaims && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {isModeratorQueue ? (
           <>
             <MetricCard label="Открытые кейсы" value={metrics.open} helper="Все очереди" tone="info" />
@@ -500,8 +505,8 @@ export function ModeratorAdminV3({
         )}
       </div>}
 
-      {!isModeratorQueue && !isModeratorEvents && <SectionTabs screen={screen} activeSurface={activeSurface} />}
-      {!isModeratorQueue && !isModeratorEvents && showEdgeStates && (
+      {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && showEdgeStates && (
         <OperationalStatesPanel partialData={screen.partialData ?? activeSurface.partialData} permissionRole="moderator" />
       )}
 
@@ -509,6 +514,7 @@ export function ModeratorAdminV3({
         screen,
         isModeratorQueue,
         isModeratorEvents,
+        isModeratorClaims,
         currentSlug,
         queue,
         eventReviews,
@@ -544,6 +550,7 @@ type ModeratorViewProps = {
   screen: AdminScreenDefinition;
   isModeratorQueue: boolean;
   isModeratorEvents: boolean;
+  isModeratorClaims: boolean;
   currentSlug: string;
   queue: ModeratorQueueItem[];
   eventReviews: ModeratorEventReview[];
@@ -591,6 +598,7 @@ type ModeratorViewProps = {
 function renderModeratorSurface(props: ModeratorViewProps) {
   const { screen, currentSlug } = props;
   if (props.isModeratorEvents) return <ModeratorEventsView {...props} />;
+  if (props.isModeratorClaims) return <ModeratorClaimsView {...props} />;
   if (screen.slug === "dashboard") return <ModeratorQueueView {...props} />;
   if (screen.slug === "reports") return <ModeratorComplaintsView {...props} />;
   if (screen.slug === "claims") return <ModeratorClaimsView {...props} />;
@@ -1554,48 +1562,296 @@ function ModeratorEvidenceView({ currentSlug, evidence, audit }: ModeratorViewPr
   );
 }
 
-function ModeratorClaimsView({ currentSlug, claimReviews, decideClaim }: ModeratorViewProps) {
-  const visible = currentSlug === "venue-claims" || currentSlug === "venue-claim-detail" || currentSlug === "ownership-evidence-review"
-    ? claimReviews.filter((claim) => claim.type === "venue")
-    : claimReviews.filter((claim) => claim.type === "organization");
-  const claim = visible[0] ?? claimReviews[0];
+const moderatorClaimFilters = ["Все", "Организации", "Площадки", "Ждут проверки", "Нужны данные", "Одобрено", "Отклонено"];
+const moderatorClaimTypeLabels = ["Организация", "Площадка", "Бренд", "Команда"];
+const moderatorClaimProofLabels = ["Документы", "Сайт / соцсети", "Фото площадки", "Договор аренды", "Письмо от владельца", "Контакт подтверждён"];
+
+function moderatorClaimTypeLabel(type: ModeratorClaimReview["type"]) {
+  return type === "organization" ? "Организация" : "Площадка";
+}
+
+function moderatorClaimStatusLabel(status: ApprovalStatus) {
+  const labels: Record<ApprovalStatus, string> = {
+    not_required: "Одобрено",
+    pending: "Ждёт проверки",
+    approved: "Одобрено",
+    rejected: "Отклонено",
+    changes_requested: "Нужны данные",
+    escalated: "Эскалировано",
+  };
+  return labels[status];
+}
+
+function moderatorClaimStatusClass(status: ApprovalStatus) {
+  if (status === "approved" || status === "not_required") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "rejected") return "border-red-200 bg-red-50 text-red-800";
+  if (status === "escalated") return "border-indigo-200 bg-indigo-50 text-indigo-800";
+  if (status === "changes_requested") return "border-orange-200 bg-orange-50 text-orange-800";
+  return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
+function moderatorClaimRiskLabel(claim: ModeratorClaimReview) {
+  if (claim.duplicateOwnerRisk) return "Высокий";
+  if (!claim.domainMatch || !claim.addressMatch) return "Средний";
+  return "Низкий";
+}
+
+function moderatorClaimProofLabel(proof: string) {
+  const labels: Record<string, string> = {
+    "Business license": "Документы",
+    "Domain email": "Сайт / соцсети",
+    "Website ownership": "Сайт / соцсети",
+    "Lease screenshot": "Договор аренды",
+    "Tax document": "Документы",
+    "Phone verification": "Контакт подтверждён",
+  };
+  return labels[proof] ?? "Документы";
+}
+
+function uniqueClaimProofs(claim: ModeratorClaimReview) {
+  return Array.from(new Set(claim.evidence.map(moderatorClaimProofLabel)));
+}
+
+function moderatorClaimChecks(claim: ModeratorClaimReview) {
+  return [
+    `Сайт / соцсети: ${claim.domainMatch ? "подтверждено" : "нужно проверить"}`,
+    `Адрес: ${claim.addressMatch ? "подтверждено" : "нужно проверить"}`,
+    `Похожие заявки: ${claim.duplicateOwnerRisk ? "есть риск" : "не найдено"}`,
+  ];
+}
+
+function moderatorClaimMissingItems(claim: ModeratorClaimReview) {
+  const items: string[] = [];
+  if (!claim.domainMatch) items.push("Сайт / соцсети");
+  if (!claim.addressMatch) items.push("Адрес");
+  if (claim.duplicateOwnerRisk) items.push("Похожие заявки");
+  return items.length ? `Нужно проверить: ${items.join(", ")}` : "Недостающих данных не видно";
+}
+
+function moderatorClaimHref(claim: ModeratorClaimReview) {
+  return claim.type === "organization" ? "/moderator/claims/organizations/claim_1" : "/moderator/claims/venues/claim_2";
+}
+
+function ModeratorClaimCard({ claim }: { claim: ModeratorClaimReview }) {
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+    <div className="rounded-xl border border-border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{moderatorClaimTypeLabel(claim.type)}</Badge>
+            <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", moderatorClaimStatusClass(claim.status))}>
+              {moderatorClaimStatusLabel(claim.status)}
+            </span>
+          </div>
+          <h3 className="mt-2 font-semibold">{claim.targetName}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {claim.claimantName} · {claim.submittedAt}
+          </p>
+        </div>
+        <Link href={moderatorClaimHref(claim)}>
+          <Button size="sm" variant="outline">Рассмотреть</Button>
+        </Link>
+      </div>
+
+      <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Доказательства</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {uniqueClaimProofs(claim).map((proof) => (
+              <Badge key={proof} variant="outline">{proof}</Badge>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Риск</p>
+          <p className="mt-1 font-medium">{moderatorClaimRiskLabel(claim)}</p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Проверка</p>
+          <div className="mt-1 space-y-1">
+            {moderatorClaimChecks(claim).map((check) => (
+              <p key={check} className="font-medium">{check}</p>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Что не хватает</p>
+          <p className="mt-1 font-medium">{moderatorClaimMissingItems(claim)}</p>
+        </div>
+      </div>
+
+      {claim.selfApprovalBlocked && (
+        <InlineNotice tone="danger" title="Нужна независимая проверка" text="Заявку должен проверить другой модератор." />
+      )}
+    </div>
+  );
+}
+
+function ModeratorClaimReferencePanel() {
+  return (
+    <div className="space-y-4">
       <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-2"><CardTitle className="text-base">Ownership claims</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          {visible.map((item) => (
-            <div key={item.id} className="rounded-xl border border-border p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{item.targetName}</p>
-                  <p className="text-sm text-muted-foreground">{item.claimantName} · {item.type} · {item.submittedAt}</p>
-                </div>
-                <StatusBadge value={item.status} />
-              </div>
-              <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-                <span>Domain: {item.domainMatch ? "match" : "mismatch"}</span>
-                <span>Address: {item.addressMatch ? "match" : "mismatch"}</span>
-                <span>Duplicate owner risk: {item.duplicateOwnerRisk ? "yes" : "no"}</span>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {item.evidence.map((doc) => <Badge key={doc} variant="outline">{doc}</Badge>)}
-              </div>
-              {item.selfApprovalBlocked && <InlineNotice tone="danger" title="Self approval blocked" text="A moderator cannot approve their own ownership claim." />}
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Типы прав</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {moderatorClaimTypeLabels.map((label) => (
+            <Badge key={label} variant="secondary">{label}</Badge>
+          ))}
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Что может быть доказательством</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {moderatorClaimProofLabels.map((label) => (
+            <Badge key={label} variant="outline">{label}</Badge>
+          ))}
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Статусы</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-2 text-sm">
+          {(["pending", "changes_requested", "approved", "rejected", "escalated"] as ApprovalStatus[]).map((status) => (
+            <div key={status} className={cn("rounded-xl border px-3 py-2 font-medium", moderatorClaimStatusClass(status))}>
+              {moderatorClaimStatusLabel(status)}
             </div>
           ))}
         </CardContent>
       </Card>
-      <SensitiveDecisionPanel
-        title="Claim decision"
-        onDecision={(payload) =>
-          decideClaim(
-            claim,
-            payload.decision === "Одобрить" ? "approved" : payload.decision === "Запросить правки" ? "changes_requested" : payload.decision === "Эскалировать" ? "escalated" : "rejected",
-            payload.reasonCode,
-          )
-        }
-      />
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Риск</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {["Низкий", "Средний", "Высокий"].map((label) => (
+            <Badge key={label} variant="outline">{label}</Badge>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ModeratorClaimsDecisionPanel({
+  claim,
+  decideClaim,
+}: {
+  claim: ModeratorClaimReview;
+  decideClaim: ModeratorViewProps["decideClaim"];
+}) {
+  const [reasonCode, setReasonCode] = useState("");
+  const [policySection, setPolicySection] = useState("");
+  const [note, setNote] = useState("Проверить доказательства и зафиксировать решение.");
+  const disabled = !reasonCode || !policySection || !note.trim();
+
+  const emit = (label: string, status: ApprovalStatus) => {
+    if (disabled) return;
+    decideClaim(claim, status, label);
+  };
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Решение</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <InlineNotice
+          tone="warn"
+          title="Причина обязательна"
+          text="Перед решением выберите код причины, раздел политики и добавьте заметку."
+        />
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Код причины</span>
+          <select
+            value={reasonCode}
+            onChange={(event) => setReasonCode(event.target.value)}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Выберите причину</option>
+            <option value="rights_confirmed">Права подтверждены</option>
+            <option value="missing_documents">Нужны документы</option>
+            <option value="ownership_mismatch">Не совпадает владелец</option>
+            <option value="duplicate_claim">Похожие заявки</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Раздел политики</span>
+          <input
+            value={policySection}
+            onChange={(event) => setPolicySection(event.target.value)}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+            placeholder="Права / Организации / Площадки"
+          />
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Заметка</span>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={3}
+            className="resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={disabled} onClick={() => emit("Одобрить", "approved")}>
+            Одобрить
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Запросить данные", "changes_requested")}>
+            Запросить данные
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Эскалировать", "escalated")}>
+            Эскалировать
+          </Button>
+          <Button variant="destructive" disabled={disabled} onClick={() => emit("Отклонить", "rejected")}>
+            Отклонить
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModeratorClaimsView({ currentSlug, claimReviews, decideClaim }: ModeratorViewProps) {
+  const visible = currentSlug === "venue-claims" || currentSlug === "venue-claim-detail" || currentSlug === "ownership-evidence-review"
+    ? claimReviews.filter((claim) => claim.type === "venue")
+    : currentSlug === "organization-claims" || currentSlug === "organization-claim-detail"
+      ? claimReviews.filter((claim) => claim.type === "organization")
+      : claimReviews;
+  const claim = visible[0] ?? claimReviews[0];
+  return (
+    <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {moderatorClaimFilters.map((filter) => (
+            <Button key={filter} variant={filter === "Все" ? "default" : "outline"} size="sm">
+              {filter}
+            </Button>
+          ))}
+        </div>
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Права на проверке</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {visible.map((item) => (
+              <ModeratorClaimCard key={item.id} claim={item} />
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+      <div className="space-y-4">
+        <InlineNotice
+          tone="warn"
+          title="Что проверить"
+          text="Сверьте заявителя, объект, доказательства и похожие заявки перед решением."
+        />
+        <ModeratorClaimReferencePanel />
+        <ModeratorClaimsDecisionPanel claim={claim} decideClaim={decideClaim} />
+      </div>
     </div>
   );
 }
