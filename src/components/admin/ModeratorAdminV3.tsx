@@ -335,8 +335,10 @@ export function ModeratorAdminV3({
   const [showEdgeStates, setShowEdgeStates] = useState(false);
 
   const pathname = usePathname();
+  const normalizedPathname = pathname.replace(/\/$/, "");
   const currentSlug = activeSlug(screen, activeSurface);
-  const isModeratorQueue = screen.slug === "dashboard" && pathname === "/moderator";
+  const isModeratorQueue = screen.slug === "dashboard" && normalizedPathname === "/moderator";
+  const isModeratorEvents = normalizedPathname === "/moderator/events";
   const metrics = useMemo(
     () => ({
       open: queue.filter((item) => item.status !== "closed").length,
@@ -453,32 +455,34 @@ export function ModeratorAdminV3({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>Модератор</span>
             <span>/</span>
-            <span>{isModeratorQueue ? "Рабочая зона" : "Case workspace"}</span>
+            <span>{isModeratorQueue ? "Рабочая зона" : isModeratorEvents ? "События" : "Case workspace"}</span>
           </div>
           <h1 className="mt-2 text-2xl font-bold tracking-normal">
-            {isModeratorQueue ? "Очередь" : activeSurface.title ?? screen.title}
+            {isModeratorQueue ? "Очередь" : isModeratorEvents ? "События" : activeSurface.title ?? screen.title}
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             {isModeratorQueue
               ? "Кейсы модерации: события, жалобы, чаты, права и апелляции."
+              : isModeratorEvents
+                ? "Проверка событий перед публикацией и после жалоб."
               : activeSurface.description ?? screen.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!isModeratorQueue && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+          {!isModeratorQueue && !isModeratorEvents && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
             <FileText className="h-4 w-4" />
             Preview states
           </Button>}
           <Link href="/moderator">
             <Button>
               <Scale className="h-4 w-4" />
-              {isModeratorQueue ? "Открыть очередь" : "Queue"}
+              {isModeratorQueue || isModeratorEvents ? "Открыть очередь" : "Queue"}
             </Button>
           </Link>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {!isModeratorEvents && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {isModeratorQueue ? (
           <>
             <MetricCard label="Открытые кейсы" value={metrics.open} helper="Все очереди" tone="info" />
@@ -494,16 +498,17 @@ export function ModeratorAdminV3({
             <MetricCard label="Due soon" value={metrics.sla} helper="Needs action" tone="warn" />
           </>
         )}
-      </div>
+      </div>}
 
-      {!isModeratorQueue && <SectionTabs screen={screen} activeSurface={activeSurface} />}
-      {!isModeratorQueue && showEdgeStates && (
+      {!isModeratorQueue && !isModeratorEvents && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isModeratorQueue && !isModeratorEvents && showEdgeStates && (
         <OperationalStatesPanel partialData={screen.partialData ?? activeSurface.partialData} permissionRole="moderator" />
       )}
 
       {renderModeratorSurface({
         screen,
         isModeratorQueue,
+        isModeratorEvents,
         currentSlug,
         queue,
         eventReviews,
@@ -538,6 +543,7 @@ export function ModeratorAdminV3({
 type ModeratorViewProps = {
   screen: AdminScreenDefinition;
   isModeratorQueue: boolean;
+  isModeratorEvents: boolean;
   currentSlug: string;
   queue: ModeratorQueueItem[];
   eventReviews: ModeratorEventReview[];
@@ -584,6 +590,7 @@ type ModeratorViewProps = {
 
 function renderModeratorSurface(props: ModeratorViewProps) {
   const { screen, currentSlug } = props;
+  if (props.isModeratorEvents) return <ModeratorEventsView {...props} />;
   if (screen.slug === "dashboard") return <ModeratorQueueView {...props} />;
   if (screen.slug === "reports") return <ModeratorComplaintsView {...props} />;
   if (screen.slug === "claims") return <ModeratorClaimsView {...props} />;
@@ -673,6 +680,78 @@ function materialCountLabel(count: number) {
   if (count === 1) return "1 материал";
   if (count > 1 && count < 5) return `${count} материала`;
   return `${count} материалов`;
+}
+
+const moderatorEventFilters = ["Все", "Ждут проверки", "Нужны правки", "Жалобы", "Высокий риск", "Одобрено", "Отклонено"];
+
+function moderatorEventSeverity(review: ModeratorEventReview) {
+  if (review.event.riskScore > 80) return "critical";
+  if (review.event.riskScore > 55) return "high";
+  if (review.event.riskScore > 25) return "medium";
+  return "low";
+}
+
+function moderatorEventSeverityLabel(severity: ReturnType<typeof moderatorEventSeverity>) {
+  const labels: Record<ReturnType<typeof moderatorEventSeverity>, string> = {
+    low: "Низкий",
+    medium: "Средний",
+    high: "Высокий",
+    critical: "Критический",
+  };
+  return labels[severity];
+}
+
+function moderatorEventStatusLabel(review: ModeratorEventReview) {
+  const platformStatus = review.event.approvalGates.find((gate) => gate.type === "platform")?.status ?? "pending";
+  const labels: Record<ApprovalStatus, string> = {
+    not_required: "Одобрено",
+    pending: "Ждёт проверки",
+    approved: "Одобрено",
+    rejected: "Отклонено",
+    changes_requested: "Нужны правки",
+    escalated: "Эскалировано",
+  };
+  return labels[platformStatus];
+}
+
+function moderatorEventStatusClass(review: ModeratorEventReview) {
+  const platformStatus = review.event.approvalGates.find((gate) => gate.type === "platform")?.status ?? "pending";
+  if (platformStatus === "approved" || platformStatus === "not_required") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (platformStatus === "rejected") return "border-red-200 bg-red-50 text-red-800";
+  if (platformStatus === "escalated") return "border-indigo-200 bg-indigo-50 text-indigo-800";
+  return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
+function moderatorEventVenueStatusLabel(review: ModeratorEventReview) {
+  const venueStatus = review.event.approvalGates.find((gate) => gate.type === "venue")?.status ?? "pending";
+  const labels: Record<ApprovalStatus, string> = {
+    not_required: "Не требуется",
+    pending: "Ждёт площадку",
+    approved: "Площадка одобрила",
+    rejected: "Площадка отклонила",
+    changes_requested: "Ждёт площадку",
+    escalated: "Ждёт площадку",
+  };
+  return labels[venueStatus];
+}
+
+function moderatorEventPlaceLabel(review: ModeratorEventReview) {
+  if (review.event.locationType === "online") return "Онлайн";
+  if (review.event.locationType === "public_place") return "Публичное место";
+  return review.event.venueName;
+}
+
+function moderatorEventReasonLabel(review: ModeratorEventReview, index: number) {
+  if (review.event.riskScore > 80) return "Автофлаг по описанию";
+  if (review.event.publicationStatus === "published" || index === 1) return "Изменение после публикации";
+  if (review.riskSignals.some((signal) => signal.includes("promo"))) return "Промо требует проверки";
+  return "Новое событие";
+}
+
+function moderatorEventCheckLabel(review: ModeratorEventReview) {
+  if (review.event.riskScore > 80) return "Описание, безопасность и подтверждение площадки.";
+  if (review.event.locationType === "external_venue") return "Описание, площадка и правила возврата.";
+  return "Описание события и публичный предпросмотр.";
 }
 
 function ModeratorQueueDecisionPanel({ audit }: { audit: ModeratorViewProps["audit"] }) {
@@ -966,14 +1045,193 @@ function LegalEscalationView({
   );
 }
 
+function ModeratorEventsDecisionPanel({ audit }: { audit: ModeratorViewProps["audit"] }) {
+  const [reasonCode, setReasonCode] = useState("");
+  const [policySection, setPolicySection] = useState("");
+  const [note, setNote] = useState("Проверить событие и зафиксировать решение.");
+  const disabled = !reasonCode || !policySection || !note.trim();
+
+  const emit = (decision: string) => {
+    if (disabled) return;
+    audit({
+      action: decision,
+      entity: "Проверка события",
+      reasonCode,
+      policySection,
+      evidenceId: "Материалы события",
+    });
+  };
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Решение</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <InlineNotice
+          tone="warn"
+          title="Причина обязательна"
+          text="Перед решением выберите код причины, раздел политики и добавьте заметку."
+        />
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Код причины</span>
+          <select
+            value={reasonCode}
+            onChange={(event) => setReasonCode(event.target.value)}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Выберите причину</option>
+            <option value="policy_clear">Правила соблюдены</option>
+            <option value="needs_changes">Нужны правки</option>
+            <option value="safety_review">Нужна проверка безопасности</option>
+            <option value="complaint_review">Жалоба требует проверки</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Раздел политики</span>
+          <input
+            value={policySection}
+            onChange={(event) => setPolicySection(event.target.value)}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+            placeholder="Безопасность / Контент / Промо"
+          />
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Заметка</span>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={3}
+            className="resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={disabled} onClick={() => emit("Одобрить")}>
+            Одобрить
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Запросить правки")}>
+            Запросить правки
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Эскалировать")}>
+            Эскалировать
+          </Button>
+          <Button variant="destructive" disabled={disabled} onClick={() => emit("Отклонить")}>
+            Отклонить
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModeratorEventReviewCard({ review, index }: { review: ModeratorEventReview; index: number }) {
+  const severity = moderatorEventSeverity(review);
+
+  return (
+    <div className="rounded-xl border border-border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold">{review.event.title}</h3>
+            <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", moderatorEventStatusClass(review))}>
+              {moderatorEventStatusLabel(review)}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {review.event.organizerName} · {moderatorEventPlaceLabel(review)} · {review.event.date}
+          </p>
+        </div>
+        <Link href={`/moderator/events/${review.event.id}`}>
+          <Button size="sm" variant="outline">Рассмотреть</Button>
+        </Link>
+      </div>
+
+      <div className="mt-4 grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Причина</p>
+          <p className="mt-1 font-medium">{moderatorEventReasonLabel(review, index)}</p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Риск</p>
+          <p className="mt-1 font-medium">{moderatorEventSeverityLabel(severity)}</p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Площадка</p>
+          <p className="mt-1 font-medium">{moderatorEventVenueStatusLabel(review)}</p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Что проверить</p>
+          <p className="mt-1 font-medium">{moderatorEventCheckLabel(review)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModeratorEventVenueStatusLegend() {
+  const statuses = ["Площадка одобрила", "Ждёт площадку", "Площадка отклонила", "Не требуется"];
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Статусы площадки</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        {statuses.map((status) => (
+          <div key={status} className="rounded-xl bg-secondary/50 px-3 py-2 font-medium">
+            {status}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ModeratorEventsView({
   currentSlug,
   eventReviews,
   contentScans,
+  audit,
   decidePlatformGate,
+  isModeratorEvents,
 }: ModeratorViewProps) {
   const review = eventReviews[0];
   const scan = contentScans.find((item) => item.eventId === review.event.id) ?? contentScans[0];
+
+  if (isModeratorEvents) {
+    return (
+      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {moderatorEventFilters.map((filter) => (
+              <Button key={filter} variant={filter === "Все" ? "default" : "outline"} size="sm">
+                {filter}
+              </Button>
+            ))}
+          </div>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">События на проверке</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {eventReviews.map((item, index) => (
+                <ModeratorEventReviewCard key={item.id} review={item} index={index} />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+        <div className="space-y-4">
+          <InlineNotice
+            tone="warn"
+            title="Что проверить"
+            text="Проверьте причину, площадку, риск и материалы перед решением."
+          />
+          <ModeratorEventVenueStatusLegend />
+          <ModeratorEventsDecisionPanel audit={audit} />
+        </div>
+      </div>
+    );
+  }
 
   if (currentSlug === "events") {
     return (
