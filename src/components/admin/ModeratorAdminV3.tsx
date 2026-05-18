@@ -340,6 +340,10 @@ export function ModeratorAdminV3({
   const isModeratorQueue = screen.slug === "dashboard" && normalizedPathname === "/moderator";
   const isModeratorEvents = normalizedPathname === "/moderator/events";
   const isModeratorClaims = normalizedPathname === "/moderator/hosts" || normalizedPathname.startsWith("/moderator/claims");
+  const isModeratorReports =
+    normalizedPathname === "/moderator/reports" ||
+    normalizedPathname === "/moderator/complaints" ||
+    /^\/moderator\/complaints\/[^/]+$/.test(normalizedPathname);
   const metrics = useMemo(
     () => ({
       open: queue.filter((item) => item.status !== "closed").length,
@@ -457,11 +461,27 @@ export function ModeratorAdminV3({
             <span>Модератор</span>
             <span>/</span>
             <span>
-              {isModeratorQueue ? "Рабочая зона" : isModeratorEvents ? "События" : isModeratorClaims ? "Права" : "Case workspace"}
+              {isModeratorQueue
+                ? "Рабочая зона"
+                : isModeratorEvents
+                  ? "События"
+                : isModeratorClaims
+                  ? "Права"
+                : isModeratorReports
+                  ? "Жалобы"
+                : "Case workspace"}
             </span>
           </div>
           <h1 className="mt-2 text-2xl font-bold tracking-normal">
-            {isModeratorQueue ? "Очередь" : isModeratorEvents ? "События" : isModeratorClaims ? "Права" : activeSurface.title ?? screen.title}
+            {isModeratorQueue
+              ? "Очередь"
+              : isModeratorEvents
+                ? "События"
+              : isModeratorClaims
+                ? "Права"
+              : isModeratorReports
+                ? "Жалобы"
+              : activeSurface.title ?? screen.title}
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             {isModeratorQueue
@@ -470,24 +490,26 @@ export function ModeratorAdminV3({
                 ? "Проверка событий перед публикацией и после жалоб."
               : isModeratorClaims
                 ? "Проверка прав на организации и площадки."
+              : isModeratorReports
+                ? "Жалобы пользователей, флаги чатов и обращения по безопасности."
               : activeSurface.description ?? screen.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+          {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && !isModeratorReports && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
             <FileText className="h-4 w-4" />
             Preview states
           </Button>}
           <Link href="/moderator">
             <Button>
               <Scale className="h-4 w-4" />
-              {isModeratorQueue || isModeratorEvents || isModeratorClaims ? "Открыть очередь" : "Queue"}
+              {isModeratorQueue || isModeratorEvents || isModeratorClaims || isModeratorReports ? "Открыть очередь" : "Queue"}
             </Button>
           </Link>
         </div>
       </div>
 
-      {!isModeratorEvents && !isModeratorClaims && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {!isModeratorEvents && !isModeratorClaims && !isModeratorReports && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {isModeratorQueue ? (
           <>
             <MetricCard label="Открытые кейсы" value={metrics.open} helper="Все очереди" tone="info" />
@@ -505,8 +527,8 @@ export function ModeratorAdminV3({
         )}
       </div>}
 
-      {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && <SectionTabs screen={screen} activeSurface={activeSurface} />}
-      {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && showEdgeStates && (
+      {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && !isModeratorReports && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && !isModeratorReports && showEdgeStates && (
         <OperationalStatesPanel partialData={screen.partialData ?? activeSurface.partialData} permissionRole="moderator" />
       )}
 
@@ -515,6 +537,7 @@ export function ModeratorAdminV3({
         isModeratorQueue,
         isModeratorEvents,
         isModeratorClaims,
+        isModeratorReports,
         currentSlug,
         queue,
         eventReviews,
@@ -551,6 +574,7 @@ type ModeratorViewProps = {
   isModeratorQueue: boolean;
   isModeratorEvents: boolean;
   isModeratorClaims: boolean;
+  isModeratorReports: boolean;
   currentSlug: string;
   queue: ModeratorQueueItem[];
   eventReviews: ModeratorEventReview[];
@@ -599,6 +623,7 @@ function renderModeratorSurface(props: ModeratorViewProps) {
   const { screen, currentSlug } = props;
   if (props.isModeratorEvents) return <ModeratorEventsView {...props} />;
   if (props.isModeratorClaims) return <ModeratorClaimsView {...props} />;
+  if (props.isModeratorReports) return <ModeratorComplaintsView {...props} />;
   if (screen.slug === "dashboard") return <ModeratorQueueView {...props} />;
   if (screen.slug === "reports") return <ModeratorComplaintsView {...props} />;
   if (screen.slug === "claims") return <ModeratorClaimsView {...props} />;
@@ -1374,11 +1399,261 @@ function PolicyMatches({ rules }: { rules: string[] }) {
   );
 }
 
+const moderatorReportFilters = ["Все", "Чаты", "События", "Пользователи", "Площадки", "Срочные", "Нужны данные", "Закрыто"];
+const moderatorReportTypeCoverage = ["Чат", "Событие", "Пользователь", "Площадка", "Спам", "Безопасность"];
+const moderatorReportReasonCoverage = [
+  "Жалоба пользователя",
+  "Флаг чата",
+  "Небезопасное поведение",
+  "Спам или мошенничество",
+  "Нарушение правил события",
+  "Дискриминация / харассмент",
+];
+const moderatorReportStatusCoverage = ["Ждёт проверки", "Нужны данные", "На проверке", "Закрыто", "Эскалировано"];
+const moderatorReportSeverityCoverage = ["Низкий", "Средний", "Высокий", "Критический"];
+
+function moderatorReportTypeLabel(type: ModeratorComplaintCase["targetType"]) {
+  const labels: Record<ModeratorComplaintCase["targetType"], string> = {
+    chat: "Чат",
+    event: "Событие",
+    organizer: "Пользователь",
+    participant: "Пользователь",
+    venue: "Площадка",
+    ai_agent: "Безопасность",
+  };
+  return labels[type];
+}
+
+function moderatorReportStatusLabel(status: ModeratorComplaintCase["status"]) {
+  const labels: Record<ModeratorComplaintCase["status"], string> = {
+    new: "Ждёт проверки",
+    investigating: "На проверке",
+    resolved: "Закрыто",
+    appealed: "Эскалировано",
+  };
+  return labels[status];
+}
+
+function moderatorReportStatusClass(status: ModeratorComplaintCase["status"]) {
+  if (status === "resolved") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "appealed") return "border-indigo-200 bg-indigo-50 text-indigo-800";
+  if (status === "investigating") return "border-blue-200 bg-blue-50 text-blue-800";
+  return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
+function moderatorReportSeverityLabel(severity: ModeratorComplaintCase["severity"]) {
+  const labels: Record<ModeratorComplaintCase["severity"], string> = {
+    low: "Низкий",
+    medium: "Средний",
+    high: "Высокий",
+    critical: "Критический",
+  };
+  return labels[severity];
+}
+
+function moderatorReportSeverityClass(severity: ModeratorComplaintCase["severity"]) {
+  if (severity === "critical") return "border-red-200 bg-red-50 text-red-800";
+  if (severity === "high") return "border-orange-200 bg-orange-50 text-orange-800";
+  if (severity === "medium") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-emerald-200 bg-emerald-50 text-emerald-800";
+}
+
+function moderatorReportReasonLabel(complaint: ModeratorComplaintCase) {
+  if (complaint.targetType === "chat") return "Дискриминация / харассмент";
+  if (complaint.targetType === "event" && complaint.severity === "critical") return "Нарушение правил события";
+  if (complaint.targetType === "ai_agent") return "Небезопасное поведение";
+  if (complaint.severity === "high") return "Жалоба пользователя";
+  return "Флаг чата";
+}
+
+function moderatorReportTargetLabel(complaint: ModeratorComplaintCase) {
+  if (complaint.targetType === "chat") return "Групповой чат Sunset Mixer";
+  if (complaint.targetType === "ai_agent") return "Ответ помощника площадки";
+  return complaint.targetName;
+}
+
+function moderatorReportContextLabel(complaint: ModeratorComplaintCase) {
+  if (complaint.targetType === "chat") return "Есть материалы жалобы и контекст общения.";
+  if (complaint.targetType === "event") return "Проверьте описание, площадку и безопасность события.";
+  if (complaint.targetType === "ai_agent") return "Проверьте ответ и влияние на безопасность пользователя.";
+  return "Есть обращение пользователя и связанные материалы.";
+}
+
+function ModeratorReportCard({ complaint }: { complaint: ModeratorComplaintCase }) {
+  return (
+    <div className="rounded-xl border border-border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{moderatorReportTypeLabel(complaint.targetType)}</Badge>
+            <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", moderatorReportStatusClass(complaint.status))}>
+              {moderatorReportStatusLabel(complaint.status)}
+            </span>
+          </div>
+          <h3 className="mt-2 font-semibold">{moderatorReportTargetLabel(complaint)}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Заявитель: {complaint.reporterName}</p>
+        </div>
+        <Link href="/moderator/complaints/cmp_1">
+          <Button size="sm" variant="outline">Рассмотреть</Button>
+        </Link>
+      </div>
+
+      <div className="mt-4 grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Причина</p>
+          <p className="mt-1 font-medium">{moderatorReportReasonLabel(complaint)}</p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Срочность</p>
+          <p className={cn("mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-semibold", moderatorReportSeverityClass(complaint.severity))}>
+            {moderatorReportSeverityLabel(complaint.severity)}
+          </p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Материалы</p>
+          <p className="mt-1 font-medium">{materialCountLabel(complaint.evidenceCount)}</p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Что известно</p>
+          <p className="mt-1 font-medium">{moderatorReportContextLabel(complaint)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModeratorReportsReferencePanel() {
+  return (
+    <div className="space-y-4">
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Типы жалоб</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {moderatorReportTypeCoverage.map((label) => (
+            <Badge key={label} variant="secondary">{label}</Badge>
+          ))}
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Причины</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {moderatorReportReasonCoverage.map((label) => (
+            <Badge key={label} variant="outline">{label}</Badge>
+          ))}
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Статусы</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {moderatorReportStatusCoverage.map((label) => (
+            <Badge key={label} variant="outline">{label}</Badge>
+          ))}
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Срочность</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {moderatorReportSeverityCoverage.map((label) => (
+            <Badge key={label} variant="outline">{label}</Badge>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ModeratorReportsDecisionPanel({
+  complaint,
+  decideComplaint,
+}: {
+  complaint: ModeratorComplaintCase;
+  decideComplaint: ModeratorViewProps["decideComplaint"];
+}) {
+  const [reasonCode, setReasonCode] = useState("");
+  const [policySection, setPolicySection] = useState("");
+  const [note, setNote] = useState("Проверить материалы жалобы и зафиксировать решение.");
+  const disabled = !reasonCode || !policySection || !note.trim();
+
+  const emit = (label: string, status: ModeratorComplaintCase["status"]) => {
+    if (disabled) return;
+    decideComplaint(complaint, status, label);
+  };
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Решение</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <InlineNotice
+          tone="warn"
+          title="Причина обязательна"
+          text="Перед решением выберите код причины, раздел политики и добавьте заметку."
+        />
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Код причины</span>
+          <select
+            value={reasonCode}
+            onChange={(event) => setReasonCode(event.target.value)}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Выберите причину</option>
+            <option value="report_confirmed">Жалоба подтверждена</option>
+            <option value="needs_context">Нужны данные</option>
+            <option value="safety_review">Срочная безопасность</option>
+            <option value="policy_violation">Нарушение правил</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Раздел политики</span>
+          <input
+            value={policySection}
+            onChange={(event) => setPolicySection(event.target.value)}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+            placeholder="Жалобы / Чаты / Безопасность"
+          />
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Заметка</span>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={3}
+            className="resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Запросить данные", "investigating")}>
+            Запросить данные
+          </Button>
+          <Button disabled={disabled} onClick={() => emit("Закрыть", "resolved")}>
+            Закрыть
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Эскалировать", "appealed")}>
+            Эскалировать
+          </Button>
+          <Button variant="destructive" disabled={disabled} onClick={() => emit("Ограничить", "resolved")}>
+            Ограничить
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ModeratorComplaintsView({
   currentSlug,
   complaintCases,
   decideComplaint,
   audit,
+  isModeratorReports,
 }: ModeratorViewProps) {
   const complaint = complaintCases[0];
   if (currentSlug === "incident-timeline") {
@@ -1431,6 +1706,41 @@ function ModeratorComplaintsView({
           title="Merge cases"
           onDecision={(payload) => audit({ action: "Merged/split cases", entity: "Complaint cases", reasonCode: payload.reasonCode, policySection: payload.policySection, evidenceId: payload.evidenceId })}
         />
+      </div>
+    );
+  }
+
+  if (isModeratorReports) {
+    return (
+      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {moderatorReportFilters.map((filter) => (
+              <Button key={filter} variant={filter === "Все" ? "default" : "outline"} size="sm">
+                {filter}
+              </Button>
+            ))}
+          </div>
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Жалобы на проверке</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {complaintCases.map((item) => (
+                <ModeratorReportCard key={item.id} complaint={item} />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+        <div className="space-y-4">
+          <InlineNotice
+            tone="warn"
+            title="Что проверить"
+            text="Сверьте тип жалобы, заявителя, материалы, срочность и статус перед решением."
+          />
+          <ModeratorReportsReferencePanel />
+          <ModeratorReportsDecisionPanel complaint={complaint} decideComplaint={decideComplaint} />
+        </div>
       </div>
     );
   }
