@@ -344,6 +344,10 @@ export function ModeratorAdminV3({
     normalizedPathname === "/moderator/reports" ||
     normalizedPathname === "/moderator/complaints" ||
     /^\/moderator\/complaints\/[^/]+$/.test(normalizedPathname);
+  const isModeratorChats =
+    normalizedPathname === "/moderator/chats" ||
+    normalizedPathname === "/moderator/chat-moderation" ||
+    /^\/moderator\/chats\/[^/]+(?:\/remove)?$/.test(normalizedPathname);
   const metrics = useMemo(
     () => ({
       open: queue.filter((item) => item.status !== "closed").length,
@@ -469,6 +473,8 @@ export function ModeratorAdminV3({
                   ? "Права"
                 : isModeratorReports
                   ? "Жалобы"
+                : isModeratorChats
+                  ? "Чаты"
                 : "Case workspace"}
             </span>
           </div>
@@ -481,6 +487,8 @@ export function ModeratorAdminV3({
                 ? "Права"
               : isModeratorReports
                 ? "Жалобы"
+              : isModeratorChats
+                ? "Чаты"
               : activeSurface.title ?? screen.title}
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -492,24 +500,26 @@ export function ModeratorAdminV3({
                 ? "Проверка прав на организации и площадки."
               : isModeratorReports
                 ? "Жалобы пользователей, флаги чатов и обращения по безопасности."
+              : isModeratorChats
+                ? "Проверка сообщений, флагов и нарушений в чатах."
               : activeSurface.description ?? screen.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && !isModeratorReports && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
+          {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && !isModeratorReports && !isModeratorChats && <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
             <FileText className="h-4 w-4" />
             Preview states
           </Button>}
           <Link href="/moderator">
             <Button>
               <Scale className="h-4 w-4" />
-              {isModeratorQueue || isModeratorEvents || isModeratorClaims || isModeratorReports ? "Открыть очередь" : "Queue"}
+              {isModeratorQueue || isModeratorEvents || isModeratorClaims || isModeratorReports || isModeratorChats ? "Открыть очередь" : "Queue"}
             </Button>
           </Link>
         </div>
       </div>
 
-      {!isModeratorEvents && !isModeratorClaims && !isModeratorReports && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {!isModeratorEvents && !isModeratorClaims && !isModeratorReports && !isModeratorChats && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {isModeratorQueue ? (
           <>
             <MetricCard label="Открытые кейсы" value={metrics.open} helper="Все очереди" tone="info" />
@@ -527,8 +537,8 @@ export function ModeratorAdminV3({
         )}
       </div>}
 
-      {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && !isModeratorReports && <SectionTabs screen={screen} activeSurface={activeSurface} />}
-      {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && !isModeratorReports && showEdgeStates && (
+      {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && !isModeratorReports && !isModeratorChats && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isModeratorQueue && !isModeratorEvents && !isModeratorClaims && !isModeratorReports && !isModeratorChats && showEdgeStates && (
         <OperationalStatesPanel partialData={screen.partialData ?? activeSurface.partialData} permissionRole="moderator" />
       )}
 
@@ -538,6 +548,7 @@ export function ModeratorAdminV3({
         isModeratorEvents,
         isModeratorClaims,
         isModeratorReports,
+        isModeratorChats,
         currentSlug,
         queue,
         eventReviews,
@@ -575,6 +586,7 @@ type ModeratorViewProps = {
   isModeratorEvents: boolean;
   isModeratorClaims: boolean;
   isModeratorReports: boolean;
+  isModeratorChats: boolean;
   currentSlug: string;
   queue: ModeratorQueueItem[];
   eventReviews: ModeratorEventReview[];
@@ -624,6 +636,7 @@ function renderModeratorSurface(props: ModeratorViewProps) {
   if (props.isModeratorEvents) return <ModeratorEventsView {...props} />;
   if (props.isModeratorClaims) return <ModeratorClaimsView {...props} />;
   if (props.isModeratorReports) return <ModeratorComplaintsView {...props} />;
+  if (props.isModeratorChats) return <ModeratorChatsView {...props} />;
   if (screen.slug === "dashboard") return <ModeratorQueueView {...props} />;
   if (screen.slug === "reports") return <ModeratorComplaintsView {...props} />;
   if (screen.slug === "claims") return <ModeratorClaimsView {...props} />;
@@ -1779,57 +1792,297 @@ function ComplaintCard({ complaint }: { complaint: ModeratorComplaintCase }) {
   );
 }
 
-function ModeratorChatsView({ currentSlug, flaggedChats, decideChat }: ModeratorViewProps) {
-  const chat = flaggedChats[0];
+const moderatorChatFilters = ["Все", "Срочные", "Чаты событий", "Личные сообщения", "Спам", "Безопасность", "Нужны данные", "Закрыто"];
+const moderatorChatTypeCoverage = ["Чат события", "Личные сообщения", "Объявление", "Автофлаг"];
+const moderatorChatReasonCoverage = [
+  "Жалоба пользователя",
+  "Небезопасное сообщение",
+  "Спам или мошенничество",
+  "Харассмент",
+  "Запрещённый контент",
+  "Политический / экстремистский риск",
+  "Угроза или насилие",
+];
+const moderatorChatStatusCoverage = ["Ждёт проверки", "На проверке", "Нужны данные", "Скрыто", "Закрыто", "Эскалировано"];
+const moderatorChatSeverityCoverage = ["Низкий", "Средний", "Высокий", "Критический"];
+
+function moderatorChatTypeLabel(chat: FlaggedChatCase, index: number) {
+  if (index === 1) return "Личные сообщения";
+  if (chat.messages.some((message) => message.author.includes("AI"))) return "Автофлаг";
+  return "Чат события";
+}
+
+function moderatorChatStatusLabel(status: FlaggedChatCase["status"]) {
+  const labels: Record<FlaggedChatCase["status"], string> = {
+    new: "Ждёт проверки",
+    reviewing: "На проверке",
+    hidden: "Скрыто",
+    removed: "Скрыто",
+    locked: "Эскалировано",
+    dismissed: "Закрыто",
+  };
+  return labels[status];
+}
+
+function moderatorChatStatusClass(status: FlaggedChatCase["status"]) {
+  if (status === "hidden" || status === "removed" || status === "dismissed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "locked") return "border-indigo-200 bg-indigo-50 text-indigo-800";
+  if (status === "reviewing") return "border-blue-200 bg-blue-50 text-blue-800";
+  return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
+function moderatorChatSeverityLabel(severity: FlaggedChatCase["severity"]) {
+  const labels: Record<FlaggedChatCase["severity"], string> = {
+    low: "Низкий",
+    medium: "Средний",
+    high: "Высокий",
+    critical: "Критический",
+  };
+  return labels[severity];
+}
+
+function moderatorChatSeverityClass(severity: FlaggedChatCase["severity"]) {
+  if (severity === "critical") return "border-red-200 bg-red-50 text-red-800";
+  if (severity === "high") return "border-orange-200 bg-orange-50 text-orange-800";
+  if (severity === "medium") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-emerald-200 bg-emerald-50 text-emerald-800";
+}
+
+function moderatorChatReasonLabel(chat: FlaggedChatCase) {
+  if (chat.reason.includes("Harassment")) return "Харассмент";
+  if (chat.reason.includes("AI")) return "Небезопасное сообщение";
+  if (chat.severity === "critical") return "Угроза или насилие";
+  return "Жалоба пользователя";
+}
+
+function moderatorChatPreviewLabel(message: FlaggedChatCase["messages"][number] | undefined) {
+  if (!message) return "Сообщение скрыто до проверки.";
+  if (message.flagReason === "unsafe_meetup_pressure") return "Предложение перейти во встречу один на один вне площадки.";
+  if (message.flagReason === "ai_safety_escalation") return "Автофлаг: участнику предложено остаться в групповом чате.";
+  if (message.flagReason === "unsafe_ai_answer") return "Ответ обещает исключение из правил площадки без подтверждения.";
+  return "Фрагмент сообщения требует проверки модератором.";
+}
+
+function moderatorChatSourceLabel(chat: FlaggedChatCase) {
+  if (chat.messages.some((message) => message.author.includes("AI"))) return `Источник: Автофлаг · Заявитель: ${chat.reporterName}`;
+  return `Заявитель: ${chat.reporterName}`;
+}
+
+function moderatorChatRelatedLabel(chat: FlaggedChatCase, index: number) {
+  if (index === 1) return "Организатор и владелец площадки";
+  return chat.eventTitle;
+}
+
+function ModeratorChatReportCard({ chat, index }: { chat: FlaggedChatCase; index: number }) {
+  const primaryMessage = chat.messages[0];
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+    <div className="rounded-xl border border-border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{moderatorChatTypeLabel(chat, index)}</Badge>
+            <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", moderatorChatStatusClass(chat.status))}>
+              {moderatorChatStatusLabel(chat.status)}
+            </span>
+          </div>
+          <h3 className="mt-2 font-semibold">{moderatorChatRelatedLabel(chat, index)}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{moderatorChatSourceLabel(chat)}</p>
+        </div>
+        <Link href="/moderator/chats/chat_1">
+          <Button size="sm" variant="outline">Рассмотреть</Button>
+        </Link>
+      </div>
+
+      <div className="mt-4 rounded-xl bg-secondary/50 p-3 text-sm">
+        <p className="text-xs text-muted-foreground">Фрагмент сообщения</p>
+        <p className="mt-1 font-medium">{moderatorChatPreviewLabel(primaryMessage)}</p>
+      </div>
+
+      <div className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Причина</p>
+          <p className="mt-1 font-medium">{moderatorChatReasonLabel(chat)}</p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Срочность</p>
+          <p className={cn("mt-1 inline-flex rounded-full border px-2 py-1 text-xs font-semibold", moderatorChatSeverityClass(chat.severity))}>
+            {moderatorChatSeverityLabel(chat.severity)}
+          </p>
+        </div>
+        <div className="rounded-xl bg-secondary/50 p-3">
+          <p className="text-xs text-muted-foreground">Материалы</p>
+          <p className="mt-1 font-medium">{materialCountLabel(chat.messages.length)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModeratorChatsReferencePanel() {
+  return (
+    <div className="space-y-4">
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">{currentSlug === "remove-message" ? "Hide / remove message flow" : "Flagged chat moderation"}</CardTitle>
+          <CardTitle className="text-base">Типы чатов</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <InlineNotice
-            tone="warn"
-            title="Privacy boundary"
-            text="Moderator can view flagged excerpts and retained evidence only. Full participant chat browsing is not available."
-          />
-          {flaggedChats.map((item) => (
-            <div key={item.id} className="rounded-xl border border-border p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{item.title}</p>
-                  <p className="text-sm text-muted-foreground">{item.eventTitle} · reporter {item.reporterName}</p>
-                </div>
-                <StatusBadge value={item.severity} type="severity" />
-              </div>
-              <p className="mt-2 text-sm">{item.reason}</p>
-              <div className="mt-3 space-y-2">
-                {item.messages.map((message) => (
-                  <div key={message.id} className="rounded-xl bg-red-50 p-3 text-sm text-red-950">
-                    <p className="font-semibold">{message.author}</p>
-                    <p className="mt-1 text-xs">{message.excerpt}</p>
-                    <p className="mt-1 text-[11px] opacity-75">{message.flagReason} · {message.retainedHash}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+        <CardContent className="flex flex-wrap gap-2">
+          {moderatorChatTypeCoverage.map((label) => (
+            <Badge key={label} variant="secondary">{label}</Badge>
           ))}
         </CardContent>
       </Card>
-      <SensitiveDecisionPanel
-        danger={currentSlug === "remove-message"}
-        title={currentSlug === "remove-message" ? "Remove and retain original" : "Chat moderation decision"}
-        primaryLabel="Apply chat action"
-        onDecision={(payload) =>
-          decideChat(
-            chat,
-            payload.decision === "Отклонить" ? "removed" : payload.decision === "Эскалировать" ? "locked" : "hidden",
-            payload.reasonCode,
-            payload.policySection,
-            payload.evidenceId,
-          )
-        }
-      />
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Причины</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {moderatorChatReasonCoverage.map((label) => (
+            <Badge key={label} variant="outline">{label}</Badge>
+          ))}
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Статусы</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {moderatorChatStatusCoverage.map((label) => (
+            <Badge key={label} variant="outline">{label}</Badge>
+          ))}
+        </CardContent>
+      </Card>
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Срочность</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {moderatorChatSeverityCoverage.map((label) => (
+            <Badge key={label} variant="outline">{label}</Badge>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ModeratorChatsDecisionPanel({ audit }: { audit: ModeratorViewProps["audit"] }) {
+  const [reasonCode, setReasonCode] = useState("");
+  const [policySection, setPolicySection] = useState("");
+  const [note, setNote] = useState("Проверить контекст сообщения и зафиксировать решение.");
+  const disabled = !reasonCode || !policySection || !note.trim();
+
+  const emit = (decision: string) => {
+    if (disabled) return;
+    audit({
+      action: decision,
+      entity: "Чат на проверке",
+      reasonCode,
+      policySection,
+      evidenceId: "Материалы чата",
+    });
+  };
+
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Решение</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <InlineNotice
+          tone="warn"
+          title="Причина обязательна"
+          text="Перед действием выберите код причины, раздел политики и добавьте заметку."
+        />
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Код причины</span>
+          <select
+            value={reasonCode}
+            onChange={(event) => setReasonCode(event.target.value)}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Выберите причину</option>
+            <option value="Харассмент">Харассмент</option>
+            <option value="Небезопасное сообщение">Небезопасное сообщение</option>
+            <option value="Спам или мошенничество">Спам или мошенничество</option>
+            <option value="Угроза или насилие">Угроза или насилие</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Раздел политики</span>
+          <input
+            value={policySection}
+            onChange={(event) => setPolicySection(event.target.value)}
+            className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+            placeholder="Чаты / Безопасность / Спам"
+          />
+        </label>
+        <label className="grid gap-1.5 text-sm">
+          <span className="font-medium">Заметка</span>
+          <textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={3}
+            className="resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={disabled} onClick={() => emit("Скрыть сообщение")}>
+            Скрыть сообщение
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Заблокировать чат")}>
+            Заблокировать чат
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Запросить данные")}>
+            Запросить данные
+          </Button>
+          <Button variant="outline" disabled={disabled} onClick={() => emit("Эскалировать")}>
+            Эскалировать
+          </Button>
+          <Button variant="destructive" disabled={disabled} onClick={() => emit("Закрыть")}>
+            Закрыть
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ModeratorChatsView({ currentSlug, flaggedChats, audit }: ModeratorViewProps) {
+  const isRemoveFlow = currentSlug === "remove-message";
+  return (
+    <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {moderatorChatFilters.map((filter) => (
+            <Button key={filter} variant={filter === "Все" ? "default" : "outline"} size="sm">
+              {filter}
+            </Button>
+          ))}
+        </div>
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="text-base">Чаты на проверке</CardTitle>
+              {isRemoveFlow && <Badge variant="outline">Проверка сообщения</Badge>}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {flaggedChats.map((item, index) => (
+              <ModeratorChatReportCard key={item.id} chat={item} index={index} />
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+      <div className="space-y-4">
+          <InlineNotice
+            tone="warn"
+            title="Что проверить"
+            text="Проверьте фрагмент, источник, причину, срочность и материалы перед действием."
+          />
+        <ModeratorChatsReferencePanel />
+        <ModeratorChatsDecisionPanel audit={audit} />
+      </div>
     </div>
   );
 }
