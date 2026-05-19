@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "qa:routes": "node scripts/qa-routes.mjs"
+    "qa:routes": "node scripts/qa-routes.mjs",
+    "qa:admin-routes": "node scripts/qa-admin-routes.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
