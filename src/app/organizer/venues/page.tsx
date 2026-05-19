@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { RoleAdminScreen } from "@/components/admin/RoleAdminScreen";
 
-export default function OrganizerVenuesRedirectPage() {
-  redirect("/organizer/venues/find");
+export default async function OrganizerVenuesPage() {
+  return <RoleAdminScreen role="organizer" slug="venues" />;
 }

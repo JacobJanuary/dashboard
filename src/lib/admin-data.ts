@@ -1854,6 +1854,7 @@ const v3RouteAliases: Record<AdminRole, RouteAliasConfig[]> = {
         ["create-v4"],
       ),
     ),
+    alias("venues", "venue-finder"),
     alias("venues/find", "venue-finder"),
     alias(/^venues\/[^/]+\/preview$/, "venue-detail"),
     alias("venue-requests/new", "venue-requests"),

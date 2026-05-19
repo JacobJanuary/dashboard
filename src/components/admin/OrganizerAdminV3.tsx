@@ -110,7 +110,7 @@ const canonicalSurfaceHrefs: Record<string, string> = {
   "ai-builder/generated-plan": "/organizer/events/ai/plan",
   "ai-builder/review-edit": "/organizer/events/ai/confirm",
   "events/ai/success": "/organizer/events/ai/success",
-  "venue-finder": "/organizer/venues/find",
+  "venue-finder": "/organizer/venues",
   "venue-detail": "/organizer/venues/ven_456/preview",
   "venue-unavailable": "/organizer/venues/ven_closed/unavailable",
   "venue-requests": "/organizer/venue-requests",
@@ -272,7 +272,7 @@ export function OrganizerAdminV3({
     ["public-profile-preview", "review-response"].includes(currentSlug);
   const isMoneySurface = screen.slug === "money" && ["/organizer/money", "/organizer/payouts"].includes(pathname);
   const isAnalyticsSurface = pathname === "/organizer/analytics" && currentSlug === "analytics";
-  const isVenueSurface = currentSlug.startsWith("venues/") || currentSlug.startsWith("venue-requests");
+  const isVenueSurface = currentSlug === "venues" || currentSlug.startsWith("venues/") || currentSlug.startsWith("venue-requests");
 
   useEffect(() => {
     setAiPrompt((current) => (
@@ -521,7 +521,7 @@ function renderOrganizerSurface(props: OrganizerSurfaceProps) {
   if (screen.slug === "money") return <OrganizerFinanceView {...props} />;
   if (screen.slug === "create") return <CreateWizardView {...props} />;
   if (screen.slug === "ai-builder") return <AIBuilderView {...props} />;
-  if (screen.slug === "venue-finder" || currentSlug.startsWith("venues/")) return <VenueFinderView {...props} />;
+  if (screen.slug === "venue-finder" || currentSlug === "venues" || currentSlug.startsWith("venues/")) return <VenueFinderView {...props} />;
   if (screen.slug === "venue-requests" || currentSlug.startsWith("venue-requests")) return <VenueRequestsView {...props} />;
   if (screen.slug === "participants" || screen.slug === "check-in") return <ParticipantsView {...props} />;
   if (screen.slug === "chats") return <OrganizerChatsView {...props} />;
@@ -2085,7 +2085,7 @@ function VenueFinderView({ currentSlug, requestVenueAccess, venueRequests }: Org
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
             Владелец не принимает заявки от внешних организаторов. Выберите другую площадку.
           </p>
-          <Link href="/organizer/venues/find"><Button className="mt-5">Выбрать другую площадку</Button></Link>
+          <Link href="/organizer/venues"><Button className="mt-5">Выбрать другую площадку</Button></Link>
         </CardContent>
       </Card>
     );
