@@ -51,6 +51,26 @@ export const routeChecks = [
     ],
   },
   { group: "Organizer", route: "/organizer/payouts", expected: ["Деньги"] },
+  {
+    group: "Organizer",
+    route: "/organizer/venues",
+    expected: [
+      "Площадки",
+      "Найдите площадку для события или проверьте запросы владельцам.",
+      "Мои запросы",
+      "Можно запросить",
+      "Не принимает заявки",
+    ],
+    forbidden: [
+      "Venue Finder",
+      "Venue Request",
+      "Access Tracker",
+      "approve_organizers",
+      "moderate_every_event",
+      "no_external_events",
+    ],
+  },
+  { group: "Organizer legacy redirects", route: "/organizer/venues/find", redirectTo: "/organizer/venues", expected: ["Площадки"] },
 
   { group: "Organizer legacy redirects", route: "/organizer/assistant", redirectTo: "/organizer/events/ai", expected: ["Начать с ИИ"] },
   { group: "Organizer legacy redirects", route: "/organizer/calendar", redirectTo: "/organizer/events", expected: ["События"] },
