@@ -34,6 +34,11 @@ export const routeChecks = [
   { group: "Organizer", route: "/organizer/money", expected: ["Деньги"] },
   { group: "Organizer", route: "/organizer/payouts", expected: ["Деньги"] },
 
+  { group: "Organizer legacy redirects", route: "/organizer/assistant", redirectTo: "/organizer/events/ai", expected: ["Начать с ИИ"] },
+  { group: "Organizer legacy redirects", route: "/organizer/calendar", redirectTo: "/organizer/events", expected: ["События"] },
+  { group: "Organizer legacy redirects", route: "/organizer/events/calendar", redirectTo: "/organizer/events", expected: ["События"] },
+  { group: "Organizer legacy redirects", route: "/organizer/events/pipeline", redirectTo: "/organizer/events", expected: ["События"] },
+
   { group: "Owner", route: "/owner", expected: ["Сегодня"] },
   { group: "Owner", route: "/venue-owner", redirectTo: "/owner", expected: ["Сегодня"] },
   { group: "Owner", route: "/owner/places", expected: ["Площадки"] },
