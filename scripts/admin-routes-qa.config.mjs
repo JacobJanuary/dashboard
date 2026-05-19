@@ -63,6 +63,7 @@ export const routeChecks = [
   { group: "Moderator", route: "/moderator/claims/organizations/claim_1", expected: ["Права"] },
   { group: "Moderator", route: "/moderator/claims/venues/claim_2", expected: ["Права"] },
   { group: "Moderator", route: "/moderator/reports", expected: ["Жалобы"] },
+  { group: "Moderator legacy redirects", route: "/moderator/reports/severity", redirectTo: "/moderator/reports", expected: ["Жалобы"] },
   { group: "Moderator", route: "/moderator/complaints", expected: ["Жалобы"] },
   { group: "Moderator", route: "/moderator/complaints/cmp_1", expected: ["Жалобы"] },
   { group: "Moderator", route: "/moderator/chats", expected: ["Чаты"] },
