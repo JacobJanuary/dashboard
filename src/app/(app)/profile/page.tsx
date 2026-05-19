@@ -52,7 +52,7 @@ export default function ProfilePage() {
               <Shield className="w-3 h-3 mr-1" />
               Фото верифицировано
             </Badge>
-            <Badge variant="secondary">She/her</Badge>
+            <Badge variant="secondary">Она/её</Badge>
           </div>
         </motion.div>
 
