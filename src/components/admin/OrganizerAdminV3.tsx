@@ -32,7 +32,6 @@ import {
   OperationalStatesPanel,
   PublicPreviewFrame,
   StatusBadge,
-  venuePolicyLabels,
 } from "./admin-ui";
 import {
   adminVenues,
@@ -160,6 +159,28 @@ const canonicalSurfaceHrefs: Record<string, string> = {
   "empty-first-launch": "/organizer/empty",
 };
 
+const organizerVenuePolicyLabels: Record<string, string> = {
+  approve_organizers: "Требуется одобрение организатора",
+  moderate_every_event: "Каждое событие требует подтверждения",
+  no_external_events: "Не принимает заявки",
+};
+
+const organizerRequestStatusLabels: Record<string, string> = {
+  pending: "Ждёт ответа владельца",
+  approved: "Уже одобрено",
+  rejected: "Отклонено",
+  changes_requested: "Требует подтверждения",
+  draft: "Ждёт отправки",
+};
+
+const venueFilterOptions = [
+  { key: "all", label: "Все" },
+  { key: "requestable", label: "Можно запросить" },
+  { key: "pending", label: "Ждёт ответа" },
+  { key: "approved", label: "Уже одобрено" },
+  { key: "closed", label: "Не принимает заявки" },
+] as const;
+
 function surfaceHref(surface: AdminScreenSurface) {
   return canonicalSurfaceHrefs[surface.slug] ?? `${roleBasePaths.organizer}/${surface.slug}`;
 }
@@ -251,6 +272,7 @@ export function OrganizerAdminV3({
     ["public-profile-preview", "review-response"].includes(currentSlug);
   const isMoneySurface = screen.slug === "money" && ["/organizer/money", "/organizer/payouts"].includes(pathname);
   const isAnalyticsSurface = pathname === "/organizer/analytics" && currentSlug === "analytics";
+  const isVenueSurface = currentSlug.startsWith("venues/") || currentSlug.startsWith("venue-requests");
 
   useEffect(() => {
     setAiPrompt((current) => (
@@ -366,7 +388,7 @@ export function OrganizerAdminV3({
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
-      {!isEventWorkspaceSurface && (
+      {!isEventWorkspaceSurface && !isVenueSurface && (
         <div className="admin-page-head flex flex-col gap-4 p-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -410,7 +432,7 @@ export function OrganizerAdminV3({
           </div>
           {!isCreateSurface && (
             <div className="flex flex-wrap gap-2">
-              {!isTodaySurface && !isEventsListSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && (
+              {!isTodaySurface && !isEventsListSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && !isVenueSurface && (
                 <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
                   <AlertTriangle className="h-4 w-4" />
                   Preview states
@@ -437,9 +459,9 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && !isVenueSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
 
-      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && (
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && !isVenueSurface && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metrics.map((metric) => (
             <MetricCard key={metric.label} {...metric} />
@@ -447,7 +469,7 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && !isVenueSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
 
       {isAnalyticsSurface ? <OrganizerAnalyticsView events={events} campaigns={campaigns} participants={participants} /> : renderOrganizerSurface({
         screen,
@@ -478,7 +500,7 @@ export function OrganizerAdminV3({
         publishSelectedEvent,
       })}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && (
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && !isVenueSurface && (
         <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <OperationalStatesPanel partialData={screen.partialData || activeSurface.partialData} permissionRole="organizer" />
           <AuditLogPanel logs={auditLogs.filter((log) => log.actorRole === "organizer")} localLogs={localAudit} />
@@ -499,8 +521,8 @@ function renderOrganizerSurface(props: OrganizerSurfaceProps) {
   if (screen.slug === "money") return <OrganizerFinanceView {...props} />;
   if (screen.slug === "create") return <CreateWizardView {...props} />;
   if (screen.slug === "ai-builder") return <AIBuilderView {...props} />;
-  if (screen.slug === "venue-finder") return <VenueFinderView {...props} />;
-  if (screen.slug === "venue-requests") return <VenueRequestsView {...props} />;
+  if (screen.slug === "venue-finder" || currentSlug.startsWith("venues/")) return <VenueFinderView {...props} />;
+  if (screen.slug === "venue-requests" || currentSlug.startsWith("venue-requests")) return <VenueRequestsView {...props} />;
   if (screen.slug === "participants" || screen.slug === "check-in") return <ParticipantsView {...props} />;
   if (screen.slug === "chats") return <OrganizerChatsView {...props} />;
   if (screen.slug === "ai-agents") return <OrganizerAIAgentsView {...props} />;
@@ -2010,23 +2032,60 @@ function GeneratedAIPlan({ draft }: { draft: AIEventDraft }) {
   );
 }
 
-function VenueFinderView({ currentSlug, requestVenueAccess }: OrganizerSurfaceProps) {
-  const closedVenue = {
-    ...adminVenues[1],
-    policy: { ...adminVenues[1].policy, mode: "no_external_events" as const },
-  };
-  const venues = [...adminVenues, closedVenue];
+function VenueFinderView({ currentSlug, requestVenueAccess, venueRequests }: OrganizerSurfaceProps) {
+  const [filter, setFilter] = useState<string>("all");
+
+  const allVenues = useMemo(() => {
+    const closedVenue = {
+      ...adminVenues[1],
+      policy: { ...adminVenues[1].policy, mode: "no_external_events" as const },
+    };
+    return [...adminVenues, closedVenue];
+  }, []);
+
+  const venueRequestMap = useMemo(() => {
+    const map = new Map<string, VenueRequest>();
+    for (const req of venueRequests) {
+      const existing = map.get(req.venueId);
+      if (!existing) {
+        map.set(req.venueId, req);
+      }
+    }
+    return map;
+  }, [venueRequests]);
+
+  const filteredVenues = useMemo(() => {
+    return allVenues.filter((venue) => {
+      const req = venueRequestMap.get(venue.id);
+      const hasPending = req?.status === "pending" || req?.status === "draft";
+      const hasApproved = req?.status === "approved";
+      const isClosed = venue.policy.mode === "no_external_events";
+
+      switch (filter) {
+        case "requestable":
+          return !isClosed && !hasPending && !hasApproved;
+        case "pending":
+          return hasPending;
+        case "approved":
+          return hasApproved;
+        case "closed":
+          return isClosed;
+        default:
+          return true;
+      }
+    });
+  }, [allVenues, venueRequestMap, filter]);
 
   if (currentSlug === "venue-unavailable") {
     return (
       <Card className="border-0 shadow-sm">
         <CardContent className="p-8 text-center">
           <XCircle className="mx-auto h-12 w-12 text-red-600" />
-          <h2 className="mt-4 text-xl font-bold">Venue disabled for external events</h2>
+          <h2 className="mt-4 text-xl font-bold">Площадка недоступна для внешних событий</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            This venue policy prevents outside organizers from creating events here. Choose another venue.
+            Владелец не принимает заявки от внешних организаторов. Выберите другую площадку.
           </p>
-          <Link href="/organizer/venues/find"><Button className="mt-5">Choose another venue</Button></Link>
+          <Link href="/organizer/venues/find"><Button className="mt-5">Выбрать другую площадку</Button></Link>
         </CardContent>
       </Card>
     );
@@ -2042,18 +2101,18 @@ function VenueFinderView({ currentSlug, requestVenueAccess }: OrganizerSurfacePr
               <Image src={demoVenueCover(0)} alt={venue.name} fill className="object-cover" sizes="(max-width: 1280px) 100vw, 60vw" />
             </div>
             <h2 className="mt-4 text-xl font-bold">{venue.name}</h2>
-            <p className="text-sm text-muted-foreground">{venue.address} · {venue.capacity} cap</p>
+            <p className="text-sm text-muted-foreground">{venue.address} · {venue.capacity} мест</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <InfoBlock title="Policy" rows={[venuePolicyLabels[venue.policy.mode], `${venue.policy.setupBufferMinutes} min setup buffer`]} />
-              <InfoBlock title="Rules" rows={venue.rules} />
+              <InfoBlock title="Правила доступа" rows={[organizerVenuePolicyLabels[venue.policy.mode] ?? venue.policy.mode, `${venue.policy.setupBufferMinutes} мин на подготовку`]} />
+              <InfoBlock title="Правила площадки" rows={venue.rules} />
             </div>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Request access</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Запросить площадку</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">Organizer access request will go to the venue owner.</p>
-            <Button className="w-full" onClick={() => requestVenueAccess(venue)}>Request access</Button>
+            <p className="text-sm text-muted-foreground">Запрос уйдёт владельцу площадки на рассмотрение.</p>
+            <Button className="w-full" onClick={() => requestVenueAccess(venue)}>Запросить площадку</Button>
           </CardContent>
         </Card>
       </div>
@@ -2061,32 +2120,91 @@ function VenueFinderView({ currentSlug, requestVenueAccess }: OrganizerSurfacePr
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      {venues.map((venue, index) => {
-        const closed = venue.policy.mode === "no_external_events";
-        return (
-          <Card key={`${venue.id}-${index}`} className="border-0 shadow-sm">
-            <CardContent className="p-4">
-              <div className="relative h-32 overflow-hidden rounded-xl">
-                <Image src={demoVenueCover(index)} alt={venue.name} fill className="object-cover" sizes="(max-width: 1024px) 100vw, 33vw" />
-              </div>
-              <h3 className="mt-4 font-bold">{venue.name}</h3>
-              <p className="text-sm text-muted-foreground">{venue.city} · {venue.capacity} cap</p>
-              <Badge className={cn("mt-3 border-0", closed ? "bg-red-100 text-red-700" : "bg-secondary text-foreground")}>
-                {venuePolicyLabels[venue.policy.mode]}
-              </Badge>
-              <div className="mt-4 flex gap-2">
-                <Link href={closed ? `/organizer/venues/${venue.id}/unavailable` : `/organizer/venues/${venue.id}/preview`} className="flex-1">
-                  <Button className="w-full" variant="outline">{closed ? "Unavailable" : "Preview"}</Button>
-                </Link>
-                <Button className="flex-1" disabled={closed} onClick={() => requestVenueAccess(venue)}>
-                  Request
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Площадки</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Найдите площадку для события или проверьте запросы владельцам.
+          </p>
+        </div>
+        <Button onClick={() => requestVenueAccess(adminVenues[0])}>
+          <Plus className="mr-2 h-4 w-4" />
+          Найти площадку
+        </Button>
+      </div>
+
+      {venueRequests.length > 0 && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Мои запросы</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {venueRequests.map((request) => (
+              <Link key={request.id} href={`/organizer/venue-requests/${request.id}`}>
+                <div className="rounded-xl border border-border p-4 hover:bg-secondary/40">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{request.venueName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {organizerRequestStatusLabels[request.status] ?? request.status} · {request.requestedAt}
+                      </p>
+                    </div>
+                    <StatusBadge value={request.status === "draft" ? "pending" : request.status} />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {venueFilterOptions.map((f) => (
+          <Button
+            key={f.key}
+            variant={filter === f.key ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {filteredVenues.map((venue, index) => {
+          const req = venueRequestMap.get(venue.id);
+          const closed = venue.policy.mode === "no_external_events";
+          return (
+            <Card key={`${venue.id}-${index}`} className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <div className="relative h-32 overflow-hidden rounded-xl">
+                  <Image src={demoVenueCover(index)} alt={venue.name} fill className="object-cover" sizes="(max-width: 1024px) 100vw, 33vw" />
+                </div>
+                <h3 className="mt-4 font-bold">{venue.name}</h3>
+                <p className="text-sm text-muted-foreground">{venue.city} · {venue.capacity} мест</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <Badge className={cn("border-0", closed ? "bg-red-100 text-red-700" : "bg-secondary text-foreground")}>
+                    {organizerVenuePolicyLabels[venue.policy.mode] ?? venue.policy.mode}
+                  </Badge>
+                  {venue.rating ? (
+                    <span className="text-xs text-muted-foreground">★ {venue.rating}</span>
+                  ) : null}
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <Link href={closed ? `/organizer/venues/${venue.id}/unavailable` : `/organizer/venues/${venue.id}/preview`} className="flex-1">
+                    <Button className="w-full" variant="outline">{closed ? "Недоступно" : "Подробнее"}</Button>
+                  </Link>
+                  <Button className="flex-1" disabled={closed} onClick={() => requestVenueAccess(venue)}>
+                    {req ? "Посмотреть запрос" : "Запросить"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -2097,20 +2215,20 @@ function VenueRequestsView({ venueRequests, requestVenueAccess, currentSlug }: O
     return (
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
         <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2"><CardTitle className="text-base">{request.venueName} thread</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">{request.venueName}</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {[request.message, request.lastReply, "Organizer: Uploading setup plan and insurance certificate."].map((message, index) => (
+            {[request.message, request.lastReply, "Организатор: загружаю план рассадки и страховку."].map((message, index) => (
               <div key={message} className={cn("rounded-xl p-3 text-sm", index === 1 ? "bg-secondary" : "bg-blue-50 text-blue-950")}>
                 {message}
               </div>
             ))}
             <div className="flex gap-2">
-              <input className="h-10 flex-1 rounded-lg border border-input bg-background px-3 text-sm" placeholder="Message venue owner" />
+              <input className="h-10 flex-1 rounded-lg border border-input bg-background px-3 text-sm" placeholder="Сообщение владельцу площадки" />
               <Button><Send className="h-4 w-4" /></Button>
             </div>
           </CardContent>
         </Card>
-        <InfoBlock title="Request status" rows={[request.status, venuePolicyLabels[request.policyMode], request.requestedAt]} />
+        <InfoBlock title="Статус запроса" rows={[organizerRequestStatusLabels[request.status] ?? request.status, organizerVenuePolicyLabels[request.policyMode] ?? request.policyMode, request.requestedAt]} />
       </div>
     );
   }
@@ -2119,8 +2237,8 @@ function VenueRequestsView({ venueRequests, requestVenueAccess, currentSlug }: O
     <Card className="border-0 shadow-sm">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-base">Venue requests</CardTitle>
-          <Button size="sm" onClick={() => requestVenueAccess(adminVenues[0])}><Plus className="h-4 w-4" /> New request</Button>
+          <CardTitle className="text-base">Запросы площадок</CardTitle>
+          <Button size="sm" onClick={() => requestVenueAccess(adminVenues[0])}><Plus className="h-4 w-4" /> Новый запрос</Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -2130,7 +2248,9 @@ function VenueRequestsView({ venueRequests, requestVenueAccess, currentSlug }: O
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="font-semibold">{request.venueName}</p>
-                  <p className="text-sm text-muted-foreground">{request.message}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {organizerRequestStatusLabels[request.status] ?? request.status} · {request.requestedAt}
+                  </p>
                 </div>
                 <StatusBadge value={request.status === "draft" ? "pending" : request.status} />
               </div>
