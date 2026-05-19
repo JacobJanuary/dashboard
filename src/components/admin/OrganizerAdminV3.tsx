@@ -250,6 +250,7 @@ export function OrganizerAdminV3({
     screen.slug === "reviews" ||
     ["public-profile-preview", "review-response"].includes(currentSlug);
   const isMoneySurface = screen.slug === "money" && ["/organizer/money", "/organizer/payouts"].includes(pathname);
+  const isAnalyticsSurface = pathname === "/organizer/analytics" && currentSlug === "analytics";
 
   useEffect(() => {
     setAiPrompt((current) => (
@@ -371,7 +372,7 @@ export function OrganizerAdminV3({
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Badge className="bg-[#eef2ff] text-[#3949d7] border-0">{roleLabels.organizer}</Badge>
               <Badge className="bg-[#f8fafc] text-[#475569] border border-[#dde4ee]">
-                {isProfileSurface ? "Публичный профиль" : isMoneySurface ? "Финансы" : "Simple workspace"}
+                {isProfileSurface ? "Публичный профиль" : isMoneySurface ? "Финансы" : isAnalyticsSurface ? "Аналитика" : "Simple workspace"}
               </Badge>
             </div>
             <h1 className="text-2xl font-bold tracking-normal">
@@ -385,6 +386,8 @@ export function OrganizerAdminV3({
                       ? "Профиль организатора"
                       : isMoneySurface
                         ? "Деньги"
+                      : isAnalyticsSurface
+                        ? "Аналитика"
                     : isCreateSurface
                       ? "Create Event"
                       : activeSurface.title}
@@ -400,26 +403,30 @@ export function OrganizerAdminV3({
                       ? "Настройте публичную страницу, описание и доверие."
                       : isMoneySurface
                         ? "Выручка, выплаты и возвраты по вашим событиям."
+                      : isAnalyticsSurface
+                        ? "Просмотры, гости, продажи и эффективность продвижения."
                   : activeSurface.description}
             </p>
           </div>
           {!isCreateSurface && (
             <div className="flex flex-wrap gap-2">
-              {!isTodaySurface && !isEventsListSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && (
+              {!isTodaySurface && !isEventsListSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && (
                 <Button variant="outline" onClick={() => setShowEdgeStates((value) => !value)}>
                   <AlertTriangle className="h-4 w-4" />
                   Preview states
                 </Button>
               )}
-              <Link href={isMessagesSurface ? "/organizer/events/evt_123/announcements" : isProfileSurface ? "/organizer/profile/preview" : isMoneySurface ? "/organizer/money" : "/organizer/events/new"}>
+              <Link href={isMessagesSurface ? "/organizer/events/evt_123/announcements" : isProfileSurface ? "/organizer/profile/preview" : isMoneySurface ? "/organizer/money" : isAnalyticsSurface ? "/organizer/events" : "/organizer/events/new"}>
                 <Button className="bg-primary hover:bg-primary/90">
-                  <Plus className="h-4 w-4" />
+                  {isAnalyticsSurface ? <Search className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                   {isMessagesSurface
                     ? "Создать объявление"
                     : isProfileSurface
                       ? "Предпросмотр"
                       : isMoneySurface
                         ? "Настроить выплаты"
+                      : isAnalyticsSurface
+                        ? "Открыть события"
                     : isTodaySurface || isEventsListSurface
                       ? "Создать событие"
                       : "Create event"}
@@ -430,9 +437,9 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && <SectionTabs screen={screen} activeSurface={activeSurface} />}
 
-      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && (
+      {!isCreateSurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {metrics.map((metric) => (
             <MetricCard key={metric.label} {...metric} />
@@ -440,9 +447,9 @@ export function OrganizerAdminV3({
         </div>
       )}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && showEdgeStates && <OrganizerEdgeStates currentSlug={currentSlug} event={selectedEvent} />}
 
-      {renderOrganizerSurface({
+      {isAnalyticsSurface ? <OrganizerAnalyticsView events={events} campaigns={campaigns} participants={participants} /> : renderOrganizerSurface({
         screen,
         activeSurface,
         currentSlug,
@@ -471,7 +478,7 @@ export function OrganizerAdminV3({
         publishSelectedEvent,
       })}
 
-      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && (
+      {!isCreateSurface && !isTodaySurface && !isEventsListSurface && !isEventWorkspaceSurface && !isMessagesSurface && !isProfileSurface && !isMoneySurface && !isAnalyticsSurface && (
         <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
           <OperationalStatesPanel partialData={screen.partialData || activeSurface.partialData} permissionRole="organizer" />
           <AuditLogPanel logs={auditLogs.filter((log) => log.actorRole === "organizer")} localLogs={localAudit} />
@@ -1312,6 +1319,185 @@ function TicketsAndCapacity({ selectedEvent }: OrganizerSurfaceProps) {
         <InfoRow label="Refund policy" value={selectedEvent.refundPolicy} />
       </CardContent>
     </Card>
+  );
+}
+
+function OrganizerAnalyticsView({
+  events,
+  campaigns,
+  participants,
+}: {
+  events: AdminEvent[];
+  campaigns: OrganizerCampaign[];
+  participants: OrganizerParticipant[];
+}) {
+  const eventRows = events.slice(0, 3).map((event, index) => {
+    const views = 1240 - index * 320;
+    const detailOpens = Math.round(views * (0.34 - index * 0.04));
+    const saves = Math.round(detailOpens * (0.26 - index * 0.03));
+    const checkIns = Math.max(0, Math.round(event.ticketsSold * (0.78 - index * 0.08)));
+    const conversion = Math.round((event.ticketsSold / views) * 100);
+    const status = index === 0 ? "Хорошо" : conversion < 8 ? "Низкая конверсия" : "Нужно внимание";
+
+    return {
+      ...event,
+      views,
+      detailOpens,
+      saves,
+      checkIns,
+      conversion,
+      status,
+    };
+  });
+
+  if (eventRows.length < 3) {
+    eventRows.push({
+      ...events[0],
+      id: "analytics_new_format",
+      title: "Новый формат события",
+      ticketsSold: 0,
+      revenue: 0,
+      views: 180,
+      detailOpens: 42,
+      saves: 8,
+      checkIns: 0,
+      conversion: 0,
+      status: "Недостаточно данных",
+    });
+  }
+
+  const totalViews = eventRows.reduce((sum, event) => sum + event.views, 0);
+  const totalGuests = events.reduce((sum, event) => sum + event.ticketsSold, 0);
+  const totalRevenue = events.reduce((sum, event) => sum + event.revenue, 0);
+  const totalConversion = totalViews > 0 ? Math.round((totalGuests / totalViews) * 100) : 0;
+  const checkedInGuests = participants.filter((participant) => participant.status === "checked_in").length;
+
+  const analyticsCards = [
+    { label: "Просмотры", value: totalViews.toLocaleString(), helper: "по страницам событий", tone: "info" as const },
+    { label: "Гости", value: totalGuests.toLocaleString(), helper: "билеты и регистрации", tone: "good" as const },
+    { label: "Продажи", value: formatMoney(totalRevenue), helper: "по билетам", tone: "good" as const },
+    { label: "Конверсия", value: `${totalConversion}%`, helper: "из просмотров в гостей", tone: "warn" as const },
+  ];
+
+  const channelLabels: Record<OrganizerCampaign["channel"], string> = {
+    boost: "Буст в ленте",
+    referral: "Реферальные ссылки",
+    search: "Поиск",
+    social: "Социальные сети",
+  };
+  const promotionRows = campaigns.slice(0, 3).map((campaign, index) => ({
+    channel: channelLabels[campaign.channel],
+    reach: campaign.impressions,
+    clicks: campaign.saves,
+    conversions: campaign.joins,
+    status: index === 0 ? "Продвижение работает" : "Нужно внимание",
+    recommendation: index === 0 ? "Увеличьте бюджет на лучший канал." : "Обновите текст и обложку.",
+  }));
+
+  const audienceRows = [
+    ["Интересы", "Музыка, знакомства, городские встречи"],
+    ["Источник", "Промо в ленте и профиль организатора"],
+    ["Возвращаются", `${Math.max(18, checkedInGuests)} гостей уже были на ваших событиях`],
+    ["Город / район", "Лос-Анджелес, западная часть города"],
+  ];
+
+  const recommendations = [
+    { title: "Улучшить обложку", action: "Улучшить страницу", text: "У первого события много открытий, но часть гостей не доходит до покупки." },
+    { title: "Добавить описание", action: "Открыть событие", text: "Короткое описание помогает поднять конверсию из просмотра в гостя." },
+    { title: "Запустить продвижение", action: "Запустить продвижение", text: "Лучший канал уже даёт заявки, можно усилить охват." },
+    { title: "Ответить гостям", action: "Посмотреть гостей", text: "Быстрые ответы повышают доверие перед оплатой." },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {analyticsCards.map((card) => (
+          <MetricCard key={card.label} {...card} />
+        ))}
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Эффективность событий</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {eventRows.map((event) => (
+            <div key={event.id} className="rounded-xl border border-border p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold">{event.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Просмотры: {event.views.toLocaleString()} · Открытия страницы: {event.detailOpens.toLocaleString()} · Сохранили: {event.saves}
+                  </p>
+                </div>
+                <Badge className="border-0 bg-secondary text-foreground">{event.status}</Badge>
+              </div>
+              <div className="mt-3 grid gap-2 text-sm sm:grid-cols-4">
+                <InfoRow label="Гости" value={`${event.ticketsSold}/${event.capacity}`} />
+                <InfoRow label="Продажи" value={formatMoney(event.revenue)} />
+                <InfoRow label="Конверсия" value={`${event.conversion}%`} />
+                <InfoRow label="Пришли" value={`${event.checkIns}`} />
+              </div>
+              <div className="mt-3">
+                <Link href={`/organizer/events/${event.id}`}>
+                  <Button size="sm" variant="outline">Открыть событие</Button>
+                </Link>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_.8fr]">
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Продвижение</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {promotionRows.map((row) => (
+              <div key={row.channel} className="rounded-xl border border-border p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-semibold">{row.channel}</p>
+                  <Badge className="border-0 bg-emerald-50 text-emerald-700">{row.status}</Badge>
+                </div>
+                <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+                  <InfoRow label="Охват" value={row.reach.toLocaleString()} />
+                  <InfoRow label="Клики" value={row.clicks.toLocaleString()} />
+                  <InfoRow label="Заявки" value={row.conversions.toLocaleString()} />
+                </div>
+                <p className="mt-3 text-sm text-muted-foreground">{row.recommendation}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Аудитория</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm">
+            {audienceRows.map(([label, value]) => (
+              <InfoRow key={label} label={label} value={value} />
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Рекомендации</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {recommendations.map((item) => (
+            <div key={item.title} className="rounded-xl border border-border p-4">
+              <p className="font-semibold">{item.title}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{item.text}</p>
+              <Button className="mt-3" size="sm" variant="outline">{item.action}</Button>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
