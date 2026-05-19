@@ -1,5 +1,5 @@
-import { RoleAdminScreen } from "@/components/admin/RoleAdminScreen";
+import { redirect } from "next/navigation";
 
 export default function OrganizerEventsPipelinePage() {
-  return <RoleAdminScreen role="organizer" slug="events/pipeline" />;
+  redirect("/organizer/events");
 }
