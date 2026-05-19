@@ -32,6 +32,24 @@ export const routeChecks = [
   { group: "Organizer", route: "/organizer/profile/preview", expected: ["Профиль организатора"] },
   { group: "Organizer", route: "/organizer/reviews", expected: ["Отзывы и доверие"] },
   { group: "Organizer", route: "/organizer/money", expected: ["Деньги"] },
+  {
+    group: "Organizer",
+    route: "/organizer/analytics",
+    expected: [
+      "Аналитика",
+      "Просмотры, гости, продажи и эффективность продвижения.",
+      "Открыть события",
+      "Эффективность событий",
+      "Продвижение",
+      "Аудитория",
+      "Рекомендации",
+    ],
+    forbidden: [
+      "Event Analytics",
+      "Funnel, no-show, retention, revenue and conversion.",
+      "Submitted event for approval",
+    ],
+  },
   { group: "Organizer", route: "/organizer/payouts", expected: ["Деньги"] },
 
   { group: "Organizer legacy redirects", route: "/organizer/assistant", redirectTo: "/organizer/events/ai", expected: ["Начать с ИИ"] },
