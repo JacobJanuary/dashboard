@@ -272,7 +272,7 @@ export function OrganizerAdminV3({
     ["public-profile-preview", "review-response"].includes(currentSlug);
   const isMoneySurface = screen.slug === "money" && ["/organizer/money", "/organizer/payouts"].includes(pathname);
   const isAnalyticsSurface = pathname === "/organizer/analytics" && currentSlug === "analytics";
-  const isVenueSurface = currentSlug === "venues" || currentSlug.startsWith("venues/") || currentSlug.startsWith("venue-requests");
+  const isVenueSurface = currentSlug === "venues" || currentSlug.startsWith("venues/") || currentSlug.startsWith("venue-requests") || currentSlug === "venue-request-thread";
 
   useEffect(() => {
     setAiPrompt((current) => (
