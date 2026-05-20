@@ -11,9 +11,9 @@ export function generateStaticParams() {
 }
 
 const demoTickets: Record<string, { eventId: string; attendeeName: string; ticketType: string; orderId: string }> = {
-  "demo-1": { eventId: "1", attendeeName: "Maya Chen", ticketType: "General Admission", orderId: "ORD-2026-001" },
-  "demo-2": { eventId: "1", attendeeName: "Jordan Blake", ticketType: "VIP Early Bird", orderId: "ORD-2026-002" },
-  "demo-3": { eventId: "2", attendeeName: "Alex Rivera", ticketType: "Standard", orderId: "ORD-2026-003" },
+  "demo-1": { eventId: "1", attendeeName: "Maya Chen", ticketType: "Общий вход", orderId: "ORD-2026-001" },
+  "demo-2": { eventId: "1", attendeeName: "Jordan Blake", ticketType: "VIP ранний доступ", orderId: "ORD-2026-002" },
+  "demo-3": { eventId: "2", attendeeName: "Alex Rivera", ticketType: "Стандартный", orderId: "ORD-2026-003" },
 };
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string }> }) {
@@ -48,7 +48,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
             </div>
             <span className="text-cream font-bold text-lg">SparkIRL</span>
           </div>
-          <p className="text-cream/60 text-xs uppercase tracking-widest">Digital Ticket</p>
+          <p className="text-cream/60 text-xs uppercase tracking-widest">Электронный билет</p>
         </div>
 
         {/* Event Info */}
@@ -91,12 +91,12 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
                 includeMargin={false}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Scan at entry</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Сканируйте при входе</p>
           </div>
 
           {/* Order ID */}
           <div className="text-center pt-2 border-t border-border">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Order ID</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Номер заказа</p>
             <p className="text-sm font-mono text-ink">{ticket.orderId}</p>
           </div>
         </div>
@@ -104,7 +104,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
         {/* Footer */}
         <div className="bg-cream/50 p-4 text-center">
           <p className="text-[10px] text-muted-foreground">
-            Present this ticket at the door. Screenshots accepted.
+            Предъявите этот билет на входе. Скриншоты принимаются.
           </p>
         </div>
       </div>
