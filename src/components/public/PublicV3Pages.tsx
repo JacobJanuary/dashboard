@@ -144,20 +144,17 @@ export function EventCheckoutPage({ id }: { id: string }) {
     <PublicShell>
       <div className="mx-auto grid max-w-5xl gap-5 lg:grid-cols-[1fr_360px]">
         <Card className="border-0 shadow-sm">
-          <CardHeader><CardTitle>Ticket checkout</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Оформление билета</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <EventSummary id={id} />
             <div className="rounded-2xl border border-border bg-white p-4">
-              <p className="font-semibold">General admission</p>
-              <p className="mt-1 text-sm text-muted-foreground">Includes event chat, QR ticket and purchase protection disclosure.</p>
+              <p className="font-semibold">Общий вход</p>
+              <p className="mt-1 text-sm text-muted-foreground">Включает чат события, QR-билет и защиту покупки.</p>
               <div className="mt-4 flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setQuantity(Math.max(1, quantity - 1))}>-</Button>
                 <span className="w-10 text-center font-bold">{quantity}</span>
                 <Button variant="outline" size="sm" onClick={() => setQuantity(quantity + 1)}>+</Button>
               </div>
-            </div>
-            <div className="rounded-2xl border border-border bg-[#fff5dd] p-4 text-sm text-[#7a4c00]">
-              Payment is mocked. No charge is created; webhook delayed state is represented separately.
             </div>
           </CardContent>
         </Card>
@@ -167,7 +164,7 @@ export function EventCheckoutPage({ id }: { id: string }) {
             <MetricRow label="Tickets" value={`${quantity}`} />
             <MetricRow label="Subtotal" value={`$${total}`} />
             <MetricRow label="Fees" value="$3" />
-            <Link href={`/event/${event.id}/confirmation`}><Button className="w-full gap-2"><CreditCard className="h-4 w-4" /> Confirm mock order</Button></Link>
+            <Link href={`/event/${event.id}/confirmation`}><Button className="w-full gap-2"><CreditCard className="h-4 w-4" /> Подтвердить заказ</Button></Link>
           </CardContent>
         </Card>
       </div>
@@ -183,7 +180,7 @@ export function EventConfirmationPage({ id }: { id: string }) {
           <CardContent className="p-6 text-center">
             <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
             <h1 className="mt-4 text-2xl font-bold">You are confirmed</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Ticket, calendar invite and event chat entry are ready.</p>
+            <p className="mt-2 text-sm text-muted-foreground">Билет, приглашение в календарь и доступ к чату готовы.</p>
           </CardContent>
         </Card>
         <EventSummary id={id} />
